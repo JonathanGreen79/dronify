@@ -1,7 +1,4 @@
-# dronify.py — clickable cards (same tab via anchors), uniform images,
-# Stage2 random per-series image, Stage3 two-row grid with *sidebar detail view*,
-# natural/human sorting by series → marketing_name (Pandas 2.x safe via padded-string keys)
-
+# dronify.py — UI with flags, badges, geo-awareness placeholder, no notes
 import re
 import random
 import streamlit as st
@@ -32,7 +29,8 @@ def load_data():
         "marketing_name", "mtom_g_nominal",
         "eu_class_marking", "uk_class_marking",
         "remote_id_builtin", "year_released",
-        "notes", "operator_id_required"
+        "notes", "operator_id_required",  # operator id logic
+        "geo_awareness"                   # placeholder (to fill in YAML later)
     ):
         if col not in df.columns:
             df[col] = ""
@@ -58,15 +56,15 @@ segment = qp.get("segment")
 series  = qp.get("series")
 model   = qp.get("model")
 
-# ---------- Image resolver (repo images via GitHub Raw) ----------
+# ---------- Image resolver ----------
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
 def resolve_img(url: str) -> str:
     """
-    Be generous:
-    - Absolute URLs: return as-is
+    Accepts:
+    - Absolute URLs: returned as-is
     - 'images/...' paths: convert to GitHub raw
-    - Bare filenames like 'mini_2.jpg' or 'air_3.png': treat as 'images/<filename>'
+    - Bare filenames like 'mini_2.jpg': assume under /images
     """
     url = (url or "").strip()
     if not url:
@@ -89,10 +87,6 @@ SEGMENT_HERO = {
     "enterprise":resolve_img("images/enterprise.jpg"),
 }
 
-# Flag icons
-EU_FLAG = resolve_img("images/eu.png")
-UK_FLAG = resolve_img("images/uk.png")
-
 # ---------- Helpers ----------
 def series_defs_for(segment_key: str):
     seg = next(s for s in taxonomy["segments"] if s["key"] == segment_key)
@@ -107,21 +101,10 @@ def series_defs_for(segment_key: str):
     return out
 
 def pad_digits_for_natural(series: pd.Series, width: int = 6) -> pd.Series:
-    """
-    Convert strings to lowercase and pad every number with leading zeros.
-    'Mini 2 SE' -> 'mini 000002 se'
-    This yields a string that sorts naturally with standard lexicographic sort.
-    """
     s = series.astype(str).str.lower()
     return s.str.replace(r"\d+", lambda m: f"{int(m.group(0)):0{width}d}", regex=True)
 
 def models_for(segment_key: str, series_key: str):
-    """
-    Return models in segment+series, sorted *naturally* by:
-      1) series (harmless inside single series)
-      2) marketing_name
-    Uses padded-string helpers (no key=) to be Pandas 2.x safe.
-    """
     seg_l = str(segment_key).strip().lower()
     ser_l = str(series_key).strip().lower()
     subset = df[(df["segment_norm"] == seg_l) & (df["series_norm"] == ser_l)].copy()
@@ -149,125 +132,61 @@ def random_image_for_series(segment_key: str, series_key: str) -> str:
 # ---------- Styles ----------
 st.markdown("""
 <style>
-/* Headings spacing */
 .block-container { padding-top: 1.1rem; }
 
-/* shared card look */
 .card {
-  width: 260px;
-  height: 240px;
-  border: 1px solid #E5E7EB;
-  border-radius: 14px;
-  background: #fff;
-  text-decoration: none !important;
-  color: #111827 !important;
-  display: block;
-  padding: 12px;
+  width: 260px; height: 240px; border: 1px solid #E5E7EB; border-radius: 14px;
+  background: #fff; text-decoration: none !important; color: #111827 !important;
+  display: block; padding: 12px;
   transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
   cursor: pointer;
 }
 .card:hover { border-color: #D1D5DB; box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-2px); }
 
 .img {
-  width: 100%;
-  height: 150px;                 /* uniform image size */
-  border-radius: 10px;
-  background: #F3F4F6;
-  overflow: hidden;
-  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 150px; border-radius: 10px; background: #F3F4F6;
+  overflow: hidden; display:flex; align-items:center; justify-content:center;
 }
-.img > img { width: 100%; height: 100%; object-fit: cover; }  /* same-size look */
+.img > img { width: 100%; height: 100%; object-fit: cover; }
 
 .title { margin-top: 10px; text-align: center; font-weight: 700; font-size: 0.98rem; }
-.sub    { margin-top: 4px;  text-align: center; font-size: .8rem; color: #6B7280; }
+.sub { margin-top: 4px; text-align: center; font-size: .8rem; color: #6B7280; }
 
-/* horizontal strip (stage 1 & 2) */
-.strip {
-  display: flex; flex-wrap: nowrap; gap: 14px; overflow-x: auto; padding: 8px 2px; margin: 0;
-}
+.strip { display:flex; flex-wrap:nowrap; gap:14px; overflow-x:auto; padding:8px 2px; margin:0; }
+.strip2 { display:grid; grid-auto-flow:column; grid-auto-columns:260px; grid-template-rows:repeat(2,1fr); gap:14px; overflow-x:auto; padding:8px 2px; margin:0; }
 
-/* stage 3: two-row horizontal grid */
-.strip2 {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 260px;     /* card width */
-  grid-template-rows: repeat(2, 1fr);
-  gap: 14px;
-  overflow-x: auto;
-  padding: 8px 2px; margin: 0;
-}
+.h1 { font-weight:800; font-size:1.2rem; color:#1F2937; margin:0 0 12px 0; }
 
-/* headings */
-.h1 { font-weight: 800; font-size: 1.2rem; color: #1F2937; margin: 0 0 12px 0; }
+/* Sidebar badges + rows */
+.badge { display:inline-block; padding:6px 10px; border-radius:999px; background:#EEF2FF; color:#3730A3; font-weight:600; font-size:.80rem; margin-right:.35rem; }
+.badge-red { background:#FEE2E2; color:#991B1B; box-shadow:0 6px 16px rgba(255, 0, 0, .08); }
+.badge-green { background:#DCFCE7; color:#14532D; box-shadow:0 6px 16px rgba(16, 185, 129, .08); }
+.badge-gray { background:#F3F4F6; color:#374151; }
 
-/* sidebar styling */
-.sidebar-title {
-  font-weight: 800; font-size: 1.05rem; margin-top: .6rem;
+.flag-row {
+  display:flex; align-items:center; gap:10px;
+  margin: 4px 0 2px 0;
 }
-.sidebar-kv {
-  margin: .15rem 0;
-  color: #374151;
-  font-size: 0.95rem;
-}
-.sidebar-muted {
-  color: #6B7280; font-size: 0.9rem;
-}
-.sidebar-back {
-  margin-top: 0.5rem;
-  display: inline-block;
-  text-decoration: none;
-  color: #2563EB;
-  font-weight: 600;
-}
+.flag { width:20px; height:20px; object-fit:contain; border-radius:3px; }
+.flag-text { font-weight:700; color:#1F2937; }
+
+.sidebar-title { font-weight:800; font-size:1.05rem; margin-top:.8rem; }
+.sidebar-kv { margin:.25rem 0; color:#374151; font-size:0.94rem; }
+.sidebar-muted { color:#6B7280; font-size:0.85rem; }
+.sidebar-back { margin-top: 0.5rem; display:inline-block; text-decoration:none; color:#2563EB; font-weight:600; }
 .sidebar-back:hover { text-decoration: underline; }
 
-/* operator ID badge - gradient */
-.badge-op {
-  display:inline-block;
-  padding:6px 10px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #FCA5A5 0%, #F87171 50%, #EF4444 100%);
-  color: #fff;
-  font-weight: 700;
-  font-size: .82rem;
-  box-shadow: 0 8px 18px rgba(239, 68, 68, .25);
-}
-
-/* plain badge (EU/UK values) */
-.badge {
-  display:inline-block;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background:#EEF2FF;
-  color:#111827;
-  font-weight:600;
-  font-size:.82rem;
-}
-
-/* rows with flags */
-.flagline {
-  display:flex; align-items:center; gap:8px;
-  margin: 2px 0 6px 0;
-}
-.flagline img.flag {
-  height:20px; width:auto; border-radius:2px;
-  box-shadow: 0 1px 2px rgba(0,0,0,.06);
-}
+/* icon bullets */
+.kv-icon { font-size: 1.05rem; display:inline-block; width: 1.35rem; text-align:center; }
 </style>
 """, unsafe_allow_html=True)
 
 # ---------- Card (anchor in same tab) ----------
 def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
-    """
-    qs example: 'segment=consumer' or 'segment=consumer&series=mini'
-    Plain anchor with target="_self" stays in same tab.
-    """
     img = f"<div class='img'><img src='{img_url}' alt=''/></div>" if img_url else "<div class='img'></div>"
     sub_html = f"<div class='sub'>{sub}</div>" if sub else ""
-    return (
-        f"<a class='card' href='?{qs}' target='_self' rel='noopener'>"
-        f"{img}<div class='title'>{title}</div>{sub_html}</a>"
-    )
+    return (f"<a class='card' href='?{qs}' target='_self' rel='noopener'>"
+            f"{img}<div class='title'>{title}</div>{sub_html}</a>")
 
 def render_row(title: str, items: list[str]):
     st.markdown(f"<div class='h1'>{title}</div><div class='strip'>{''.join(items)}</div>", unsafe_allow_html=True)
@@ -277,7 +196,7 @@ def render_two_rows(title: str, items: list[str]):
 
 # ---------- Screens ----------
 if not segment:
-    # Stage 1 — choose group (horizontal)
+    # Stage 1 — choose group
     items = []
     for seg in taxonomy["segments"]:
         img = SEGMENT_HERO.get(seg["key"], "")
@@ -285,13 +204,12 @@ if not segment:
     render_row("Choose your drone category", items)
 
 elif not series:
-    # Stage 2 — choose series (horizontal, random image from that series only)
+    # Stage 2 — choose series, show random image from that series
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     items = []
     for s in series_defs_for(segment):
         rnd_img = random_image_for_series(segment, s["key"])
-        items.append(card_link(f"segment={segment}&series={s['key']}",
-                               f"{s['label']}", img_url=rnd_img))
+        items.append(card_link(f"segment={segment}&series={s['key']}", f"{s['label']}", img_url=rnd_img))
     render_row(f"Choose a series ({seg_label})", items)
 
 else:
@@ -305,7 +223,7 @@ else:
         if not sel.empty:
             row = sel.iloc[0]
 
-            # Back link only (breadcrumb removed)
+            # Back link to series grid (breadcrumb removed per request)
             back_qs = f"segment={segment}&series={series}"
             st.sidebar.markdown(
                 f"<a class='sidebar-back' href='?{back_qs}' target='_self'>← Back to models</a>",
@@ -317,50 +235,57 @@ else:
             if img_url:
                 st.sidebar.image(img_url, use_container_width=True, caption=row.get("marketing_name", ""))
 
-            # EU/UK lines with flags (20px), separate lines
+            # EU/UK classes as separate rows with flags
             eu = (row.get("eu_class_marking") or row.get("class_marking") or "unknown") or "unknown"
             uk = (row.get("uk_class_marking") or row.get("class_marking") or "unknown") or "unknown"
 
+            eu_flag = resolve_img("images/eu.png")
+            uk_flag = resolve_img("images/uk.png")
+
             st.sidebar.markdown(
-                f"""
-                <div class='flagline'>
-                    <img class='flag' src="{EU_FLAG}" alt="EU"/>
-                    <span class='badge'>EU: {eu}</span>
-                </div>
-                <div class='flagline'>
-                    <img class='flag' src="{UK_FLAG}" alt="UK"/>
-                    <span class='badge'>UK: {uk}</span>
-                </div>
-                """,
+                f"<div class='flag-row'><img class='flag' src='{eu_flag}' alt='EU flag'><span class='flag-text'>EU:</span> <span class='badge'>{eu}</span></div>",
+                unsafe_allow_html=True
+            )
+            st.sidebar.markdown(
+                f"<div class='flag-row'><img class='flag' src='{uk_flag}' alt='UK flag'><span class='flag-text'>UK:</span> <span class='badge'>{uk}</span></div>",
                 unsafe_allow_html=True
             )
 
-            # Operator ID badge
+            # Operator ID badge (color-coded)
             op = str(row.get("operator_id_required", "")).strip().lower()
             if op in ("yes", "true", "1"):
-                st.sidebar.markdown("<div class='badge-op'>Operator ID: Required</div>", unsafe_allow_html=True)
+                op_badge = "<span class='badge badge-red'>Operator ID: Required</span>"
             elif op in ("no", "false", "0"):
-                st.sidebar.markdown("<div class='badge badge-ok'>Operator ID: Not required</div>", unsafe_allow_html=True)
+                op_badge = "<span class='badge badge-green'>Operator ID: Not required</span>"
             else:
-                st.sidebar.markdown("<div class='badge'>Operator ID: Unknown</div>", unsafe_allow_html=True)
+                op_badge = "<span class='badge badge-gray'>Operator ID: Unknown</span>"
+            st.sidebar.markdown(op_badge, unsafe_allow_html=True)
 
-            # Key specs (remove "Weight band")
+            # Flyer ID placeholder badge
+            st.sidebar.markdown("<span class='badge badge-gray'>Flyer ID</span>", unsafe_allow_html=True)
+
+            # Key specs
             st.sidebar.markdown("<div class='sidebar-title'>Key specs</div>", unsafe_allow_html=True)
+
+            # Icons: model (🛩️), weight/MTOW (⚖️), remote (🛰️), calendar (📅)
+            mtow = str(row.get("mtom_g_nominal", "")).strip()
+            mtow_display = (mtow + " g") if mtow else "—"
+
+            remote_id = str(row.get("remote_id_builtin", "")).strip() or "unknown"
+
+            # Geo-awareness placeholder (to be populated later from YAML)
+            geo_awareness = str(row.get("geo_awareness", "")).strip() or "—"
+
             st.sidebar.markdown(
                 f"""
-                <div class='sidebar-kv'>🔧 <b>Model</b> : {row.get('marketing_name', '—')}</div>
-                <div class='sidebar-kv'>⚖️ <b>MTOW</b> : {row.get('mtom_g_nominal', '—')} g</div>
-                <div class='sidebar-kv'>📡 <b>Remote ID</b> : {row.get('remote_id_builtin', 'unknown')}</div>
-                <div class='sidebar-kv'>📅 <b>Released</b> : {row.get('year_released', '—')}</div>
+                <div class='sidebar-kv'><span class='kv-icon'>🛩️</span><b>Model</b> : {row.get('marketing_name', '—')}</div>
+                <div class='sidebar-kv'><span class='kv-icon'>⚖️</span><b>MTOW</b> : {mtow_display}</div>
+                <div class='sidebar-kv'><span class='kv-icon'>🛰️</span><b>Remote ID</b> : {remote_id}</div>
+                <div class='sidebar-kv'><span class='kv-icon'>🗺️</span><b>Geo-awareness</b> : {geo_awareness}</div>
+                <div class='sidebar-kv'><span class='kv-icon'>📅</span><b>Released</b> : {row.get('year_released', '—')}</div>
                 """,
                 unsafe_allow_html=True
             )
-
-            # Notes (optional)
-            notes = str(row.get("notes", "")).strip()
-            if notes:
-                st.sidebar.markdown("<div class='sidebar-title'>Notes</div>", unsafe_allow_html=True)
-                st.sidebar.markdown(f"<div class='sidebar-muted'>{notes}</div>", unsafe_allow_html=True)
 
             # Keep main body intentionally blank for now
             st.write("")
@@ -374,7 +299,7 @@ else:
         models = models_for(segment, series)
         items = []
         for _, r in models.iterrows():
-            # Sub info: EU/UK class + weight (omit "weight band" on purpose)
+            # Sub info: show EU/UK class + weight band
             eu_c = (r.get("eu_class_marking") or r.get("class_marking") or "").strip()
             uk_c = (r.get("uk_class_marking") or r.get("class_marking") or "").strip()
             parts = []
@@ -382,6 +307,14 @@ else:
                 eu_show = eu_c if eu_c else "—"
                 uk_show = uk_c if uk_c else "—"
                 parts.append(f"Class: EU {eu_show} • UK {uk_show}")
+            else:
+                cm = r.get("class_marking", "").strip()
+                if cm:
+                    parts.append(f"Class: {cm}")
+            # keep weight band out of sidebar per your ask, but OK in card subtitle:
+            wb = r.get("weight_band", "")
+            if isinstance(wb, str) and wb:
+                parts.append(f"Weight: {wb}")
             sub = " • ".join(parts)
 
             items.append(
