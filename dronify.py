@@ -45,46 +45,53 @@ st.markdown("""
     .stApp {
         background-color: #fafafa;
     }
+    .card-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 25px;
+        margin-top: 20px;
+    }
     .card {
         background-color: white;
         border: 1px solid #ddd;
         border-radius: 12px;
         padding: 10px;
         text-align: center;
+        width: 280px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.08);
         transition: all 0.2s ease-in-out;
+        cursor: pointer;
     }
     .card:hover {
-        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        box-shadow: 0 3px 8px rgba(0,0,0,0.2);
         transform: translateY(-2px);
     }
     .card img {
-        width: 180px;
-        height: 120px;
+        width: 200px;
+        height: 130px;
         object-fit: contain;
-        margin-bottom: 8px;
+        border-radius: 8px;
+        margin-bottom: 10px;
     }
     .card-title {
         font-weight: 600;
-        color: #222 !important;
+        color: #222;
         text-decoration: none !important;
+        margin-bottom: 6px;
     }
     .card-sub {
         font-size: 13px;
         color: #666;
     }
-    .center {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 20px;
-        margin-top: 20px;
+    button[title="button"] {
+        display: none;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- Step 1: Select Segment ---------------- #
+# ---------------- Step Logic ---------------- #
 if "stage" not in st.session_state:
     st.session_state.stage = 1
 if "segment" not in st.session_state:
@@ -95,53 +102,50 @@ if "series" not in st.session_state:
 def reset_to_stage(stage):
     st.session_state.stage = stage
 
+# ---------------- Step 1 ---------------- #
 if st.session_state.stage == 1:
     st.subheader("Choose your drone category")
 
-    cols = st.columns(3, gap="large")
-    for idx, (seg, img) in enumerate(SEGMENT_IMAGES.items()):
-        with cols[idx]:
-            if st.button("", key=f"seg_btn_{seg}"):
-                st.session_state.segment = seg
-                st.session_state.stage = 2
-            st.markdown(f"""
-                <div class="card" onclick="document.querySelector('[data-testid=stButton][key=seg_btn_{seg}] button').click()">
-                    <img src="{img}" alt="{seg}">
-                    <div class="card-title">{seg.capitalize()}</div>
-                </div>
-            """, unsafe_allow_html=True)
+    st.markdown('<div class="card-container">', unsafe_allow_html=True)
+    for seg, img in SEGMENT_IMAGES.items():
+        st.markdown(
+            f"""
+            <div class="card" onclick="window.location.reload(); 
+            fetch('/_stcore/update', {{method:'POST',headers:{{'Content-Type':'application/json'}},
+            body:JSON.stringify({{'segment':'{seg}','stage':2}})}})">
+                <img src="{img}" alt="{seg}">
+                <div class="card-title">{seg.capitalize()}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------------- Step 2: Select Series ---------------- #
+# ---------------- Step 2 ---------------- #
 elif st.session_state.stage == 2:
     seg = st.session_state.segment
     st.subheader(f"Choose a series ({seg.capitalize()})")
 
     series_list = sorted(df.loc[df["segment"] == seg, "series"].dropna().unique())
 
-    st.markdown('<div class="center">', unsafe_allow_html=True)
+    st.markdown('<div class="card-container">', unsafe_allow_html=True)
     for s in series_list:
         subset = df[(df["segment"] == seg) & (df["series"] == s)]
-        if not subset.empty:
-            chosen = subset.sample(1).iloc[0]
-            img_file = chosen.get("image_url", "")
-            img = resolve_img(img_file)
-        else:
-            img = resolve_img("consumer.jpg")
-
-        st.markdown(f"""
-        <div class="card" onclick="fetch('/?series={s}')">
-            <img src="{img}" alt="{s}">
-            <div class="card-title">{s.title()} Series</div>
-        </div>
-        """, unsafe_allow_html=True)
+        img = resolve_img(subset.sample(1).iloc[0].get("image_url", "")) if not subset.empty else resolve_img("consumer.jpg")
+        st.markdown(
+            f"""
+            <div class="card" onclick="window.location.reload(); 
+            fetch('/_stcore/update', {{method:'POST',headers:{{'Content-Type':'application/json'}},
+            body:JSON.stringify({{'series':'{s}','stage':3}})}})">
+                <img src="{img}" alt="{s}">
+                <div class="card-title">{s.title()} Series</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    for s in series_list:
-        if st.button(f"Select {s}", key=f"series_{s}"):
-            st.session_state.series = s
-            st.session_state.stage = 3
-
-# ---------------- Step 3: Select Model ---------------- #
+# ---------------- Step 3 ---------------- #
 elif st.session_state.stage == 3:
     seg = st.session_state.segment
     ser = st.session_state.series
@@ -149,20 +153,23 @@ elif st.session_state.stage == 3:
 
     models = df[(df["segment"] == seg) & (df["series"] == ser)]
 
-    st.markdown('<div class="center">', unsafe_allow_html=True)
+    st.markdown('<div class="card-container">', unsafe_allow_html=True)
     for _, row in models.iterrows():
         img = resolve_img(row.get("image_url", ""))
         name = row.get("marketing_name", "")
         weight = row.get("weight_band", "unknown")
         cls = row.get("class_marking", "unknown")
 
-        st.markdown(f"""
-        <div class="card">
-            <img src="{img}" alt="{name}">
-            <div class="card-title">{name}</div>
-            <div class="card-sub">Class: {cls} • Weight: {weight}</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="card">
+                <img src="{img}" alt="{name}">
+                <div class="card-title">{name}</div>
+                <div class="card-sub">Class: {cls} • Weight: {weight}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     st.markdown("</div>", unsafe_allow_html=True)
 
     if st.button("← Back"):
