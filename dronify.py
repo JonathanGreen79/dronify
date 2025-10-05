@@ -65,8 +65,16 @@ def series_defs_for(segment_key: str):
     return [s for s in seg["series"]
             if not df[(df["segment"] == segment_key) & (df["series"] == s["key"])].empty]
 
+import re
+
 def models_for(segment_key: str, series_key: str):
-    return df[(df["segment"] == segment_key) & (df["series"] == series_key)].sort_values("marketing_name")
+    subset = df[(df["segment"] == segment_key) & (df["series"] == series_key)].copy()
+
+    def alphanum_key(name: str):
+        """Split string into text and numeric chunks for natural sorting."""
+        return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', str(name))]
+
+    return subset.sort_values(by="marketing_name", key=lambda col: col.map(alphanum_key))
 
 def random_image_for_series(segment_key: str, series_key: str) -> str:
     subset = df[
@@ -198,3 +206,4 @@ else:
                 eu = row.get("eu_class_marking", row.get("class_marking", "unknown"))
                 uk = row.get("uk_class_marking", row.get("class_marking", "unknown"))
                 st.metric("EU / UK Class", f"{eu} / {uk}")
+
