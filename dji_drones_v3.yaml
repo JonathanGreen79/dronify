@@ -29,7 +29,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
-    image_url: images/dji-flip.jpg
+    image_url: images/dji_flip.png
     notes: Sub-250 g C0; foldable guards.
 
   - model_key: dji-neo
@@ -44,7 +44,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
-    image_url: images/dji-neo.jpg
+    image_url: images/dji_neo.jpg
     notes: Sub-250 g selfie drone.
 
   - model_key: mini
@@ -59,7 +59,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
-    image_url: images/mini.jpg
+    image_url: images/mini_mavic.jpg
     notes: Legacy sub-250g.
 
   - model_key: mini-2
@@ -74,7 +74,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
-    image_url: images/mini-2.jpg
+    image_url: images/mini_2.png
     notes: Legacy; OcuSync 2.0.
 
   - model_key: mini-2-se
@@ -89,7 +89,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
-    image_url: images/mini-2-se.jpg
+    image_url: images/mini_2_se.jpg
     notes: Budget Mini variant.
 
   - model_key: mini-3
@@ -104,7 +104,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
-    image_url: images/mini-3.jpg
+    image_url: images/mini_3.jpeg
     notes: C0-labelled variant availability can vary.
 
   - model_key: mini-3-pro
@@ -119,7 +119,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
-    image_url: images/mini-3-pro.jpg
+    image_url: images/mini_3_pro.png
     notes: Some units updated to C1 in EU; keep EU=C0/C1 if you prefer.
 
   - model_key: mini-4-pro
@@ -134,7 +134,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/mini-4-pro.jpg
+    image_url: images/mini_4_pro.jpg
     notes: Omnidirectional sensing; often C0/C1 in EU.
 
   - model_key: mini-5-pro
@@ -164,7 +164,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
-    image_url: images/air-2s.jpg
+    image_url: images/air_2s.jpg
     notes: Legacy 1-inch sensor.
 
   - model_key: air-3
@@ -179,7 +179,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/air-3.jpg
+    image_url: images/air_3.png
     notes: Dual-camera C1.
 
   - model_key: air-3s
@@ -194,7 +194,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
-    image_url: images/air-3s.jpg
+    image_url: images/air_3s.jpg
     notes: Placeholder class; verify label.
 
   - model_key: avata
@@ -224,7 +224,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/avata-2.jpg
+    image_url: images/avata_2.jpg
     notes: C1 FPV cinewhoop.
 
   - model_key: dji-fpv
@@ -239,7 +239,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
-    image_url: images/dji-fpv.jpg
+    image_url: images/fpv.jpg
     notes: Hybrid FPV; legacy.
 
   # ========== PROFESSIONAL ==========
@@ -255,7 +255,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/mavic-3.jpg
+    image_url: images/mavic_3.jpg
     notes: Dual-camera Hasselblad + tele.
 
   - model_key: mavic-3-classic
@@ -270,7 +270,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/mavic-3-classic.jpg
+    image_url: images/mavic_3_classic.jpg
     notes: Single Hasselblad camera.
 
   - model_key: mavic-3-pro
@@ -285,7 +285,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/mavic-3-pro.jpg
+    image_url: images/mavic_3_pro.jpg
     notes: Triple-camera; C2.
 
   - model_key: inspire-3
@@ -300,7 +300,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/inspire-3.jpg
+    image_url: images/inspire_3.jpg
     notes: Cinema platform; Specific category common.
 
   # ========== ENTERPRISE ==========
@@ -316,7 +316,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/mavic-3e.jpg
+    image_url: images/mavic_3e.jpg
     notes: Mapping + RTK.
 
   - model_key: mavic-3t
@@ -331,7 +331,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/mavic-3t.jpg
+    image_url: images/mavic_3t.jpg
     notes: Thermal variant.
 
   - model_key: matrice-30
@@ -346,7 +346,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/matrice-30.jpg
+    image_url: images/matrice_30.jpg
     notes: IP55; enterprise foldable.
 
   - model_key: matrice-30t
@@ -361,7 +361,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/matrice-30t.jpg
+    image_url: images/matrice_30t.jpg
     notes: Thermal.
 
   - model_key: matrice-4e
@@ -376,7 +376,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/matrice-4e.jpg
+    image_url: images/matrice_4e.jpg
     notes: Enterprise payload platform.
 
   - model_key: matrice-4t
@@ -391,7 +391,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/matrice-4t.jpg
+    image_url: images/matrice_4t.jpg
     notes: Thermal flagship.
 
   - model_key: m300-rtk
@@ -406,7 +406,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/m300-rtk.jpg
+    image_url: images/m300_rtk.jpg
     notes: Workhorse; Specific category.
 
   - model_key: m350-rtk
@@ -421,5 +421,5 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/m350-rtk.jpg
+    image_url: images/m350_rtk.jpg
     notes: Successor to M300 RTK.
