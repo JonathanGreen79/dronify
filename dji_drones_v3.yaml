@@ -1,19 +1,19 @@
 schema:
   fields:
-    model_key: Stable identifier (lowercase, dashes)
-    marketing_name: Product name
-    segment: consumer | pro | enterprise
-    series: mini | air | mavic | mavic-enterprise | avata | fpv | inspire | m-series | matrice | neo | flip
-    mtom_g_nominal: Nominal MTOM in grams
-    eu_class_marking: EU class (C0–C6) or legacy/unknown
-    uk_class_marking: UK class (UK0–UK6) if known, else ""
-    year_released: Year introduced
-    has_camera: "yes" | "no"
-    has_geoawareness: "yes" | "no" | "unknown"
-    remote_id_builtin: "yes" | "no" | "unknown"
-    operator_id_required: "yes" | "no" | "unknown"
-    image_url: Path under /images or external URL
-    notes: Optional short note
+    model_key: "Stable identifier (lowercase, dashes)"
+    marketing_name: "Product name"
+    segment: "consumer | pro | enterprise"
+    series: "mini | air | mavic | mavic-enterprise | avata | fpv | inspire | m-series | matrice | neo | flip"
+    mtom_g_nominal: "Nominal MTOM in grams"
+    eu_class_marking: "EU class (C0–C6) or legacy/unknown"
+    uk_class_marking: "UK class (UK0–UK6) if known, else \"\""
+    year_released: "Year introduced"
+    has_camera: "\"yes\" | \"no\""
+    geo_awareness: "\"yes\" | \"no\" | \"unknown\""
+    remote_id_builtin: "\"yes\" | \"no\" | \"unknown\""
+    operator_id_required: "\"yes\" | \"no\" | \"unknown\""
+    image_url: "Path under /images or external URL"
+    notes: "Optional short note"
 
 data:
   # ========== CONSUMER ==========
@@ -26,7 +26,7 @@ data:
     uk_class_marking: ""
     year_released: 2025
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
     image_url: images/dji-flip.jpg
@@ -41,7 +41,7 @@ data:
     uk_class_marking: ""
     year_released: 2025
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
     image_url: images/dji-neo.jpg
@@ -56,7 +56,7 @@ data:
     uk_class_marking: ""
     year_released: 2019
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
     image_url: images/mini.jpg
@@ -71,7 +71,7 @@ data:
     uk_class_marking: ""
     year_released: 2020
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
     image_url: images/mini-2.jpg
@@ -86,7 +86,7 @@ data:
     uk_class_marking: ""
     year_released: 2023
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
     image_url: images/mini-2-se.jpg
@@ -101,7 +101,7 @@ data:
     uk_class_marking: ""
     year_released: 2022
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
     image_url: images/mini-3.jpg
@@ -116,11 +116,11 @@ data:
     uk_class_marking: ""
     year_released: 2022
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
     image_url: images/mini-3-pro.jpg
-    notes: Some units updated to C1 in EU; keep EU= C0/C1 if you prefer.
+    notes: Some units updated to C1 in EU; keep EU=C0/C1 if you prefer.
 
   - model_key: mini-4-pro
     marketing_name: DJI Mini 4 Pro
@@ -131,7 +131,7 @@ data:
     uk_class_marking: ""
     year_released: 2023
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/mini-4-pro.jpg
@@ -146,7 +146,7 @@ data:
     uk_class_marking: ""
     year_released: 2025
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/mini-5-pro.jpg
@@ -161,7 +161,7 @@ data:
     uk_class_marking: ""
     year_released: 2021
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
     image_url: images/air-2s.jpg
@@ -176,7 +176,7 @@ data:
     uk_class_marking: ""
     year_released: 2023
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/air-3.jpg
@@ -191,7 +191,7 @@ data:
     uk_class_marking: ""
     year_released: 2025
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
     image_url: images/air-3s.jpg
@@ -206,7 +206,7 @@ data:
     uk_class_marking: ""
     year_released: 2022
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
     image_url: images/avata.jpg
@@ -221,7 +221,7 @@ data:
     uk_class_marking: ""
     year_released: 2024
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/avata-2.jpg
@@ -236,7 +236,7 @@ data:
     uk_class_marking: ""
     year_released: 2021
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
     image_url: images/dji-fpv.jpg
@@ -252,7 +252,7 @@ data:
     uk_class_marking: ""
     year_released: 2021
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/mavic-3.jpg
@@ -267,7 +267,7 @@ data:
     uk_class_marking: ""
     year_released: 2022
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/mavic-3-classic.jpg
@@ -282,7 +282,7 @@ data:
     uk_class_marking: ""
     year_released: 2023
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/mavic-3-pro.jpg
@@ -297,7 +297,7 @@ data:
     uk_class_marking: ""
     year_released: 2023
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/inspire-3.jpg
@@ -313,7 +313,7 @@ data:
     uk_class_marking: ""
     year_released: 2022
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/mavic-3e.jpg
@@ -328,7 +328,7 @@ data:
     uk_class_marking: ""
     year_released: 2022
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/mavic-3t.jpg
@@ -343,7 +343,7 @@ data:
     uk_class_marking: ""
     year_released: 2022
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/matrice-30.jpg
@@ -358,7 +358,7 @@ data:
     uk_class_marking: ""
     year_released: 2022
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/matrice-30t.jpg
@@ -373,7 +373,7 @@ data:
     uk_class_marking: ""
     year_released: 2024
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/matrice-4e.jpg
@@ -388,7 +388,7 @@ data:
     uk_class_marking: ""
     year_released: 2024
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/matrice-4t.jpg
@@ -403,7 +403,7 @@ data:
     uk_class_marking: ""
     year_released: 2020
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/m300-rtk.jpg
@@ -418,7 +418,7 @@ data:
     uk_class_marking: ""
     year_released: 2023
     has_camera: "yes"
-    has_geoawareness: "yes"
+    geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
     image_url: images/m350-rtk.jpg
