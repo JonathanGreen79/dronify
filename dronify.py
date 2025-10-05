@@ -1,5 +1,6 @@
-# dronify.py — horizontal clickable cards, uniform images, Stage2 random per-series image,
-# Stage3 two-row grid, and natural/human sorting by series → marketing_name.
+# dronify.py — horizontal clickable cards (same tab), uniform images,
+# Stage2 random per-series image, Stage3 two-row grid,
+# and natural/human sorting by series → marketing_name (Pandas 2.x safe).
 
 import re
 import random
@@ -31,13 +32,14 @@ def load_data():
 
 df, taxonomy = load_data()
 
-# ---------- Query-param state (pure anchors; no buttons) ----------
+# ---------- Query-param state (pure in-tab updates) ----------
 def get_qp():
     try:
-        return dict(st.query_params)
+        return dict(st.query_params)  # Streamlit ≥1.32
     except Exception:
         # legacy fallback
-        return {k: (v[0] if isinstance(v, list) else v) for k, v in st.experimental_get_query_params().items()}
+        return {k: (v[0] if isinstance(v, list) else v)
+                for k, v in st.experimental_get_query_params().items()}
 
 qp = get_qp()
 segment = qp.get("segment")   # e.g. 'consumer' | 'pro' | 'enterprise' | None
@@ -77,15 +79,23 @@ def models_for(segment_key: str, series_key: str):
     Return models in segment+series, sorted *naturally* by:
       1) series
       2) marketing_name
+    (Uses helper columns so Pandas 2.x 'key=' is applied once per sort.)
     """
     subset = df[(df["segment"] == segment_key) & (df["series"] == series_key)].copy()
-    # Optional refinement: group by series first, then natural sort by marketing_name
-    # (series grouping is mostly redundant inside one series, but keeps behavior consistent across all series)
+
+    # helper columns as strings
+    subset["series_sort"] = subset["series"].astype(str)
+    subset["name_sort"]   = subset["marketing_name"].astype(str)
+
+    # sort with a single key function applied to the column being sorted
     subset = subset.sort_values(
-        by=["series", "marketing_name"],
+        by=["series_sort", "name_sort"],
         key=lambda col: col.map(natural_key),
         ignore_index=True
     )
+
+    # drop helpers (optional)
+    subset = subset.drop(columns=["series_sort", "name_sort"])
     return subset
 
 def random_image_for_series(segment_key: str, series_key: str) -> str:
@@ -117,6 +127,7 @@ st.markdown("""
   display: block;
   padding: 12px;
   transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
+  cursor: pointer;
 }
 .card:hover { border-color: #D1D5DB; box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-2px); }
 
@@ -154,9 +165,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def card_link(href: str, title: str, sub: str = "", img_url: str = "") -> str:
+# ---------- Card (same tab) ----------
+# We update URL query params *in place* using Streamlit's postMessage API.
+def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
+    """
+    qs example: 'segment=consumer' or 'segment=consumer&series=mini'
+    """
     img = f"<div class='img'><img src='{img_url}' alt=''/></div>" if img_url else "<div class='img'></div>"
-    return f"<a class='card' href='{href}'>{img}<div class='title'>{title}</div>" + (f"<div class='sub'>{sub}</div>" if sub else "") + "</a>"
+    js = (
+        "window.parent.postMessage("
+        "{type: 'streamlit:setQueryParams', query: '" + qs.replace("'", "%27") + "'}"
+        ", '*'); return false;"
+    )
+    sub_html = f"<div class='sub'>{sub}</div>" if sub else ""
+    return f"<a class='card' href='#' onclick=\"{js}\">{img}<div class='title'>{title}</div>{sub_html}</a>"
 
 def render_row(title: str, items: list[str]):
     st.markdown(f"<div class='h1'>{title}</div><div class='strip'>{''.join(items)}</div>", unsafe_allow_html=True)
@@ -166,20 +188,20 @@ def render_two_rows(title: str, items: list[str]):
 
 # ---------- Screens ----------
 if not segment:
-    # Stage 1 — choose group
+    # Stage 1 — choose group (horizontal)
     items = []
     for seg in taxonomy["segments"]:
         img = SEGMENT_HERO.get(seg["key"], "")
-        items.append(card_link(f"?segment={seg['key']}", seg["label"], img_url=img))
+        items.append(card_link(f"segment={seg['key']}", seg["label"], img_url=img))
     render_row("Choose your drone category", items)
 
 elif not series:
-    # Stage 2 — choose series (random image from that series only)
+    # Stage 2 — choose series (horizontal, random image from that series only)
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     items = []
     for s in series_defs_for(segment):
         rnd_img = random_image_for_series(segment, s["key"])
-        items.append(card_link(f"?segment={segment}&series={s['key']}",
+        items.append(card_link(f"segment={segment}&series={s['key']}",
                                f"{s['label']}", img_url=rnd_img))
     render_row(f"Choose a series ({seg_label})", items)
 
@@ -199,9 +221,14 @@ else:
         if isinstance(wb, str) and wb:
             subbits.append(f"Weight: {wb}")
         sub = " • ".join(subbits)
-        items.append(card_link(f"?segment={segment}&series={series}&model={r['model_key']}",
-                               r.get("marketing_name", ""), sub=sub,
-                               img_url=resolve_img(str(r.get("image_url", "")))))
+        items.append(
+            card_link(
+                f"segment={segment}&series={series}&model={r['model_key']}",
+                r.get("marketing_name", ""),
+                sub=sub,
+                img_url=resolve_img(str(r.get("image_url", "")))
+            )
+        )
     render_two_rows(f"Choose a drone ({seg_label} → {ser_label})", items)
 
     # Summary after a model is picked
