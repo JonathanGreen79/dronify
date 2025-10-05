@@ -108,8 +108,8 @@ section[data-testid="stSidebar"] label p { font-size: .9rem; margin: 0; }
 .grid3 { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; align-items: stretch; }
 .grid3 > div { display:flex; }
 
-/* Column headers row + dividers */
-.grid3-headers { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; margin-bottom: 6px; }
+/* Column headers row + dividers (matches grid3) */
+.grid3-headers { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; margin: 4px 0 10px; }
 .grid3-headers .hdrcell { font-weight:800; font-size:1.15rem; color:#111827; }
 
 /* Vertical dividers between columns */
