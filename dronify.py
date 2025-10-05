@@ -1,4 +1,5 @@
-# dronify.py — sequential UI, stage 3 two-row horizontal grid, GitHub Raw images
+# dronify.py — Stage1: segment images; Stage2: random image per card; Stage3: 2-row grid
+import random
 import streamlit as st
 import pandas as pd
 import yaml
@@ -6,7 +7,7 @@ from pathlib import Path
 
 st.set_page_config(page_title="Drone Picker", layout="wide")
 
-DATASET_PATH = Path("dji_drones_v3.yaml")   # your latest dataset
+DATASET_PATH = Path("dji_drones_v3.yaml")
 TAXONOMY_PATH = Path("taxonomy.yaml")
 
 # ---------- Data loading ----------
@@ -19,7 +20,6 @@ def load_data():
     dataset = load_yaml(DATASET_PATH)
     taxonomy = load_yaml(TAXONOMY_PATH)
     df = pd.DataFrame(dataset["data"])
-    # backfills so UI can rely on columns
     for col in ("eu_class_marking","uk_class_marking","image_url","segment","series"):
         if col not in df.columns:
             df[col] = ""
@@ -27,16 +27,22 @@ def load_data():
 
 df, taxonomy = load_data()
 
-# ---------- Image URL resolver (use GitHub Raw for images/) ----------
+# ---------- Image URL resolver (GitHub Raw for repo images/) ----------
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
 def resolve_img(url: str) -> str:
     if not url:
         return ""
     if url.startswith("images/"):
-        # convert "images/foo.jpg" -> GitHub raw URL
         return RAW_BASE + url.split("/", 1)[1]
-    return url  # already absolute
+    return url
+
+# Segment hero images for Stage 1
+SEGMENT_HERO = {
+    "consumer": resolve_img("images/consumer.jpg"),
+    "pro":       resolve_img("images/professional.jpg"),
+    "enterprise":resolve_img("images/enterprise.jpg"),
+}
 
 # ---------- Query-param driven state ----------
 ss = st.session_state
@@ -48,7 +54,6 @@ def get_qp():
     try:
         return dict(st.query_params)
     except Exception:
-        # fallback for older Streamlit
         return {k:(v[0] if isinstance(v, list) else v) for k,v in st.experimental_get_query_params().items()}
 
 qp = get_qp()
@@ -68,10 +73,18 @@ def series_defs_for(segment_key: str):
 def models_for(segment_key: str, series_key: str):
     return df[(df["segment"] == segment_key) & (df["series"] == series_key)].sort_values("marketing_name")
 
+def random_image_for_segment(segment_key: str) -> str:
+    """Pick a random image_url from any model in the segment; fallback to hero image."""
+    candidates = df[(df["segment"] == segment_key) & (df["image_url"].astype(str) != "")]
+    if not candidates.empty:
+        url = random.choice(list(candidates["image_url"]))
+        return resolve_img(str(url))
+    # fallback to segment hero if available
+    return SEGMENT_HERO.get(segment_key, "")
+
 # ---------- Styles ----------
 CSS = """
 <style>
-/* shared card look */
 .card{
   flex:0 0 240px;
   height:220px;
@@ -94,23 +107,22 @@ CSS = """
 .sub{ font-size:.78rem; color:#6B7280; margin-top:4px }
 .h1{ font-weight:700; font-size:1.05rem; margin:0 0 10px 0; color:#374151 }
 
-/* stage 1 & 2: one-row horizontal strip */
+/* stage 1 & 2: one-row strip */
 .strip{
   display:flex; flex-wrap:nowrap; gap:12px; overflow-x:auto; padding:6px 2px; margin:0;
 }
 
-/* stage 3: TWO-ROW horizontal grid that scrolls sideways */
+/* stage 3: two-row horizontal grid */
 .strip2{
   display:grid;
-  grid-auto-flow: column;           /* extend horizontally */
-  grid-auto-columns: 240px;         /* card width */
+  grid-auto-flow: column;
+  grid-auto-columns: 240px;
   grid-template-rows: repeat(2, 1fr);
   gap: 12px;
-  overflow-x: auto;                  /* only horizontal scroll */
+  overflow-x: auto;
   padding: 6px 2px; margin: 0;
 }
 
-/* summary boxes */
 .summary{ border:1px solid #E5E7EB; border-radius:12px; padding:12px; background:#fff }
 .summary .lab{ font-size:.78rem; color:#6B7280; margin-bottom:4px }
 .summary .val{ font-size:1.05rem; font-weight:600 }
@@ -129,19 +141,25 @@ def render_strip_two_rows(title: str, items: list[str]):
 
 # ---------- Screens ----------
 if ss.segment is None:
-    # screen 1 — groups (one row)
-    items = [card_html(f"?segment={seg['key']}", seg["label"]) for seg in taxonomy["segments"]]
+    # Stage 1 — groups (with hero images)
+    items = []
+    for seg in taxonomy["segments"]:
+        hero = SEGMENT_HERO.get(seg["key"], "")
+        items.append(card_html(f"?segment={seg['key']}", seg["label"], img_url=hero))
     render_strip("Choose your group", items)
 
 elif ss.series is None:
-    # screen 2 — series for selected group (one row; no back link)
+    # Stage 2 — series for selected group (random image pulled from ANY model in the segment)
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == ss.segment)
     sdefs = series_defs_for(ss.segment)
-    items = [card_html(f"?segment={ss.segment}&series={s['key']}", s["label"]) for s in sdefs]
+    items = []
+    for s in sdefs:
+        random_img = random_image_for_segment(ss.segment)  # may differ each run
+        items.append(card_html(f"?segment={ss.segment}&series={s['key']}", s["label"], img_url=random_img))
     render_strip(f"Choose a series ({seg_label})", items)
 
 else:
-    # screen 3 — models (two-row horizontal grid)
+    # Stage 3 — models (two-row horizontal grid)
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == ss.segment)
     ser_label = next(s["label"] for s in series_defs_for(ss.segment) if s["key"] == ss.series)
 
