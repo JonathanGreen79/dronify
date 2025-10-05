@@ -509,8 +509,7 @@ else:
         # Credentials (compact)
         st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
         have_op   = st.sidebar.checkbox("Operator ID", value=False, key="c_op")
-        have_fl   = st.sidebar.checkbox("Flyer ID (basic test)", value=False, key="c_fl")
-        have_a1a3 = st.sidebar.checkbox("A1/A3 training (optional)", value=False, key="c_a1a3")
+        have_fl   = st.sidebar.checkbox("Flyer ID", value=False, key="c_fl")
         have_a2   = st.sidebar.checkbox("A2 CofC", value=False, key="c_a2")
         have_gvc  = st.sidebar.checkbox("GVC", value=False, key="c_gvc")
         have_oa   = st.sidebar.checkbox("OA (Operational Authorisation)", value=False, key="c_oa")
@@ -597,3 +596,4 @@ else:
             f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
             unsafe_allow_html=True,
         )
+
