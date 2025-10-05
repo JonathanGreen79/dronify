@@ -1,5 +1,5 @@
 # dronify.py — clickable cards (same tab via anchors), uniform images,
-# Stage2 random per-series image, Stage3 two-row grid,
+# Stage2 random per-series image, Stage3 two-row grid with *sidebar detail view*,
 # natural/human sorting by series → marketing_name (Pandas 2.x safe via padded-string keys)
 
 import re
@@ -25,7 +25,9 @@ def load_data():
     taxonomy = load_yaml(TAXONOMY_PATH)
     df = pd.DataFrame(dataset["data"])
     # Ensure columns exist so UI never breaks
-    for col in ("image_url", "segment", "series", "class_marking", "weight_band", "marketing_name"):
+    for col in ("image_url", "segment", "series", "class_marking", "weight_band",
+                "marketing_name", "mtom_g_nominal", "eu_class_marking",
+                "uk_class_marking", "remote_id_builtin", "year_released", "notes"):
         if col not in df.columns:
             df[col] = ""
     return df, taxonomy
@@ -81,17 +83,15 @@ def pad_digits_for_natural(series: pd.Series, width: int = 6) -> pd.Series:
 def models_for(segment_key: str, series_key: str):
     """
     Return models in segment+series, sorted *naturally* by:
-      1) series (not really needed inside a single series, but harmless)
+      1) series (harmless inside single series)
       2) marketing_name
     Uses padded-string helpers (no key=) to be Pandas 2.x safe.
     """
     subset = df[(df["segment"] == segment_key) & (df["series"] == series_key)].copy()
-
     subset["series_key"] = pad_digits_for_natural(subset["series"])
     subset["name_key"]   = pad_digits_for_natural(subset["marketing_name"])
-
     subset = subset.sort_values(
-        by=["series_key", "name_key", "marketing_name"],  # final tie-breaker keeps original name order
+        by=["series_key", "name_key", "marketing_name"],
         kind="stable",
         ignore_index=True
     )
@@ -161,6 +161,30 @@ st.markdown("""
 
 /* headings */
 .h1 { font-weight: 800; font-size: 1.2rem; color: #1F2937; margin: 0 0 12px 0; }
+
+/* sidebar styling */
+.sidebar-card img {
+  border-radius: 10px;
+}
+.sidebar-title {
+  font-weight: 800; font-size: 1.05rem; margin-top: .6rem;
+}
+.sidebar-kv {
+  margin: .15rem 0;
+  color: #374151;
+  font-size: 0.93rem;
+}
+.sidebar-muted {
+  color: #6B7280; font-size: 0.85rem;
+}
+.sidebar-back {
+  margin-top: 0.5rem;
+  display: inline-block;
+  text-decoration: none;
+  color: #2563EB;
+  font-weight: 600;
+}
+.sidebar-back:hover { text-decoration: underline; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -203,42 +227,74 @@ elif not series:
     render_row(f"Choose a series ({seg_label})", items)
 
 else:
-    # Stage 3 — choose model (two rows)
+    # Stage 3
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     ser_label = next(s["label"] for s in series_defs_for(segment) if s["key"] == series)
 
-    models = models_for(segment, series)
-    items = []
-    for _, r in models.iterrows():
-        subbits = []
-        cm = r.get("class_marking", "unknown")
-        if isinstance(cm, str) and cm:
-            subbits.append(f"Class: {cm}")
-        wb = r.get("weight_band", "")
-        if isinstance(wb, str) and wb:
-            subbits.append(f"Weight: {wb}")
-        sub = " • ".join(subbits)
-        items.append(
-            card_link(
-                f"segment={segment}&series={series}&model={r['model_key']}",
-                r.get("marketing_name", ""),
-                sub=sub,
-                img_url=resolve_img(str(r.get("image_url", "")))
-            )
-        )
-    render_two_rows(f"Choose a drone ({seg_label} → {ser_label})", items)
-
-    # Summary after a model is picked
+    # If a model is selected, show ONLY a sidebar with details; keep body blank.
     if model:
         sel = df[df["model_key"] == model]
         if not sel.empty:
             row = sel.iloc[0]
-            st.markdown("---")
-            c1, c2, c3, c4 = st.columns(4)
-            with c1: st.metric("MTOW (g)", row.get("mtom_g_nominal", "—"))
-            with c2: st.metric("Name", row.get("marketing_name", "—"))
-            with c3: st.metric("Model Key", row.get("model_key", "—"))
-            with c4:
-                eu = row.get("eu_class_marking", row.get("class_marking", "unknown"))
-                uk = row.get("uk_class_marking", row.get("class_marking", "unknown"))
-                st.metric("EU / UK Class", f"{eu} / {uk}")
+
+            # Sidebar content
+            st.sidebar.markdown(f"**{seg_label} → {ser_label}**")
+            # Back link to series grid
+            back_qs = f"segment={segment}&series={series}"
+            st.sidebar.markdown(f"<a class='sidebar-back' href='?{back_qs}' target='_self'>← Back to models</a>", unsafe_allow_html=True)
+
+            # Thumbnail
+            st.sidebar.image(resolve_img(row.get("image_url", "")),
+                             use_column_width=True, caption=row.get("marketing_name", ""))
+
+            # Key specs
+            st.sidebar.markdown("<div class='sidebar-title'>Key specs</div>", unsafe_allow_html=True)
+            st.sidebar.markdown(
+                f"""
+                <div class='sidebar-kv'><b>Model</b>: {row.get('marketing_name', '—')}</div>
+                <div class='sidebar-kv'><b>Model key</b>: {row.get('model_key', '—')}</div>
+                <div class='sidebar-kv'><b>MTOW</b>: {row.get('mtom_g_nominal', '—')} g</div>
+                <div class='sidebar-kv'><b>Weight band</b>: {row.get('weight_band', '—')}</div>
+                <div class='sidebar-kv'><b>EU / UK class</b>: {row.get('eu_class_marking', row.get('class_marking', 'unknown'))} / {row.get('uk_class_marking', row.get('class_marking', 'unknown'))}</div>
+                <div class='sidebar-kv'><b>Remote ID</b>: {row.get('remote_id_builtin', 'unknown')}</div>
+                <div class='sidebar-kv'><b>Released</b>: {row.get('year_released', '—')}</div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            # Notes (optional)
+            notes = str(row.get("notes", "")).strip()
+            if notes:
+                st.sidebar.markdown("<div class='sidebar-title'>Notes</div>", unsafe_allow_html=True)
+                st.sidebar.markdown(f"<div class='sidebar-muted'>{notes}</div>", unsafe_allow_html=True)
+
+            # Keep main body intentionally blank for now
+            st.write("")
+            st.write("")
+        else:
+            # If invalid model key, just fall back to grid
+            model = None
+
+    # If no model selected, show the model grid (two rows)
+    if not model:
+        models = models_for(segment, series)
+        items = []
+        for _, r in models.iterrows():
+            subbits = []
+            cm = r.get("class_marking", "unknown")
+            if isinstance(cm, str) and cm:
+                subbits.append(f"Class: {cm}")
+            wb = r.get("weight_band", "")
+            if isinstance(wb, str) and wb:
+                subbits.append(f"Weight: {wb}")
+            sub = " • ".join(subbits)
+            items.append(
+                card_link(
+                    f"segment={segment}&series={series}&model={r['model_key']}",
+                    r.get("marketing_name", ""),
+                    sub=sub,
+                    img_url=resolve_img(str(r.get("image_url", "")))
+                )
+            )
+        render_two_rows(f"Choose a drone ({seg_label} → {ser_label})", items)
+
