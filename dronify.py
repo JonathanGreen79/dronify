@@ -12,12 +12,10 @@ TAXONOMY_PATH = Path("taxonomy.yaml")
 
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
-
 # ---------- Helpers: data & images ----------
 def load_yaml(path: Path):
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
-
 
 @st.cache_data(show_spinner=False)
 def load_data():
@@ -41,7 +39,6 @@ def load_data():
 
     return df, taxonomy
 
-
 def resolve_img(url: str) -> str:
     url = (url or "").strip()
     if not url:
@@ -53,7 +50,6 @@ def resolve_img(url: str) -> str:
         return RAW_BASE + url.split("/", 1)[1]
     # bare filename -> assume images/
     return RAW_BASE + url.lstrip("/")
-
 
 # ---------- UI CSS ----------
 st.markdown(
@@ -108,13 +104,11 @@ section[data-testid="stSidebar"] label p { font-size: .9rem; margin: 0; }
 .grid3 { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; align-items: stretch; }
 .grid3 > div { display:flex; }
 
-/* Column headers row + dividers (matches grid3) */
-.grid3-headers { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; margin: 4px 0 10px; }
-.grid3-headers .hdrcell { font-weight:800; font-size:1.15rem; color:#111827; }
+/* Header cells */
+.hdrcell { font-weight:800; font-size:1.15rem; color:#111827; }
 
 /* Vertical dividers between columns */
-.divided.grid3 > div:not(:first-child),
-.divided.grid3-headers > div:not(:first-child) {
+.divided.grid3 > div:not(:first-child) {
   border-left: 1px solid #EDEFF3;
   padding-left: 12px;
 }
@@ -122,7 +116,6 @@ section[data-testid="stSidebar"] label p { font-size: .9rem; margin: 0; }
 """,
     unsafe_allow_html=True,
 )
-
 
 # ---------- Query params ----------
 def get_qp():
@@ -134,14 +127,12 @@ def get_qp():
             for k, v in st.experimental_get_query_params().items()
         }
 
-
 qp = get_qp()
 segment = qp.get("segment")
 series  = qp.get("series")
 model   = qp.get("model")
 
 df, taxonomy = load_data()
-
 
 # ---------- Taxonomy helpers ----------
 def series_defs_for(segment_key: str):
@@ -156,7 +147,6 @@ def series_defs_for(segment_key: str):
             out.append(s)
     return out
 
-
 def random_image_for_series(segment_key: str, series_key: str) -> str:
     seg_l = str(segment_key).strip().lower()
     ser_l = str(series_key).strip().lower()
@@ -166,7 +156,6 @@ def random_image_for_series(segment_key: str, series_key: str) -> str:
         return ""
     raw = str(subset.sample(1)["image_url"].iloc[0])
     return resolve_img(raw)
-
 
 def models_for(segment_key: str, series_key: str):
     seg_l = str(segment_key).strip().lower()
@@ -183,22 +172,18 @@ def models_for(segment_key: str, series_key: str):
     )
     return subset.drop(columns=["name_key"])
 
-
 # ---------- Brick rendering ----------
 def pill_ok(txt, title=None):
     t = f' title="{title}"' if title else ""
     return f"<span class='pill pill-ok'{t}>{txt}</span>"
 
-
 def pill_need(txt, title=None):
     t = f' title="{title}"' if title else ""
     return f"<span class='pill pill-need'{t}>{txt}</span>"
 
-
 def pill_info(txt, title=None):
     t = f' title="{title}"' if title else ""
     return f"<span class='pill pill-info'{t}>{txt}</span>"
-
 
 def badge(txt, kind="possible"):
     cls = {
@@ -208,7 +193,6 @@ def badge(txt, kind="possible"):
         "oagvc": "badge badge-oagvc",
     }[kind]
     return f"<span class='{cls}'>{txt}</span>"
-
 
 def card(title, status_badge, body_html, kind="possible"):
     bg = {
@@ -225,17 +209,14 @@ def card(title, status_badge, body_html, kind="possible"):
 </div>
 """
 
-
 def yesish(val: str) -> bool:
     return str(val).strip().lower() in {"yes", "true", "1", "ok"}
-
 
 def rule_text_a1():
     return (
         "Fly close to people; avoid assemblies/crowds. TOAL: sensible separation; "
         "follow local restrictions."
     )
-
 
 def rule_text_a2(year: int):
     if year < 2026:
@@ -245,13 +226,11 @@ def rule_text_a2(year: int):
         )
     return "C2: 30 m from uninvolved people (5 m in low-speed)."
 
-
 def rule_text_a3():
     return (
         "Keep ≥150 m from residential/commercial/industrial/recreational areas. "
         "TOAL: well away from uninvolved people and built-up areas."
     )
-
 
 def rule_text_specific():
     return (
@@ -259,7 +238,6 @@ def rule_text_specific():
         "mitigations defined by your approved procedures (e.g., PDRA-01: ≥50 m in "
         "flight; TOAL may be reduced to 30 m; no overflight of assemblies)."
     )
-
 
 def compute_bricks(row: pd.Series, creds: dict, year: int):
     """
@@ -355,14 +333,12 @@ def compute_bricks(row: pd.Series, creds: dict, year: int):
 
     return html_a1, html_a2, html_a3, html_sp
 
-
 # ---------- STAGE 1 & 2 ----------
 SEGMENT_HERO = {
     "consumer": resolve_img("images/consumer.jpg"),
     "pro": resolve_img("images/professional.jpg"),
     "enterprise": resolve_img("images/enterprise.jpg"),
 }
-
 
 def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
     img = (
@@ -376,14 +352,12 @@ def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
         f"{img}<div style='margin-top:10px;text-align:center;font-weight:700;font-size:.98rem'>{title}</div>{sub_html}</a>"
     )
 
-
 def render_row(title: str, items: list[str]):
     st.markdown(
         f"<div class='h1'>{title}</div>"
         f"<div style='display:flex;gap:14px;overflow-x:auto;padding:8px 2px'>{''.join(items)}</div>",
         unsafe_allow_html=True,
     )
-
 
 # ---------- PAGE FLOW ----------
 if not segment:
@@ -463,32 +437,20 @@ else:
         have_oa   = st.sidebar.checkbox("OA (Operational Authorisation)", value=False, key="c_oa")
         creds = dict(op=have_op, flyer=have_fl, a1a3=have_a1a3, a2=have_a2, gvc=have_gvc, oa=have_oa)
 
-        # Legend in sidebar
-        st.sidebar.markdown(
-            """
-<div class='legend'>
-  <div class='sidebar-title' style='margin:0 0 6px'>Legend</div>
-  <span class='badge badge-allowed'>Allowed</span>
-  <span class='badge badge-possible'>Possible (additional requirements)</span>
-  <span class='badge badge-oagvc'>Available via OA/GVC</span>
-  <span class='badge badge-na'>Not applicable</span>
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
         # --------- Compute all bricks ---------
         a_now = compute_bricks(row, creds, 2025)
         a_26  = compute_bricks(row, creds, 2026)
         a_28  = compute_bricks(row, creds, 2028)
 
-        # ---------- HEADERS (NOW | 2026 | 2028) with column dividers ----------
+        # ---------- HEADERS (NOW | 2026 | 2028) using SAME grid as bricks ----------
         st.markdown(
-            "<div class='grid3-headers divided'>"
-            "<div class='hdrcell'>NOW</div>"
-            "<div class='hdrcell'>2026</div>"
-            "<div class='hdrcell'>2028 (planned)</div>"
-            "</div>",
+            """
+<div class='grid3 divided' style='margin:4px 0 10px'>
+  <div><div class='hdrcell'>NOW</div></div>
+  <div><div class='hdrcell'>2026</div></div>
+  <div><div class='hdrcell'>2028 (planned)</div></div>
+</div>
+""",
             unsafe_allow_html=True,
         )
 
