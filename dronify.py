@@ -59,14 +59,33 @@ series  = qp.get("series")
 model   = qp.get("model")
 
 # ---------- Image resolver (repo images via GitHub Raw) ----------
+# Points to your repo's /images/ folder
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
 def resolve_img(url: str) -> str:
+    """
+    Robust resolver:
+    - absolute URLs -> returned as-is
+    - 'images/foo.jpg' -> converted to RAW_BASE + 'foo.jpg'
+    - bare filenames like 'mini_3.jpg' -> RAW_BASE + 'mini_3.jpg'
+    - other relative paths -> RAW_BASE + that path
+    """
     if not url:
         return ""
-    if url.startswith("images/"):
-        return RAW_BASE + url.split("/", 1)[1]
-    return url
+    u = str(url).strip()
+    if not u:
+        return ""
+    # absolute (http/https/data)
+    if u.startswith(("http://", "https://", "data:")):
+        return u
+    # starts with images/ -> strip and append to RAW_BASE
+    if u.startswith("images/"):
+        return RAW_BASE + u.split("/", 1)[1]
+    # bare filename (no slash): prefix RAW_BASE
+    if "/" not in u:
+        return RAW_BASE + u
+    # other relative path -> still serve from images root
+    return RAW_BASE + u
 
 # Stage 1 hero images
 SEGMENT_HERO = {
@@ -126,8 +145,9 @@ def random_image_for_series(segment_key: str, series_key: str) -> str:
     subset = df[
         (df["segment"] == segment_key)
         & (df["series"] == series_key)
-        & (df["image_url"].astype(str) != "")
     ]
+    # only rows with a non-empty image path after strip
+    subset = subset[subset["image_url"].astype(str).str.strip() != ""]
     if subset.empty:
         return SEGMENT_HERO.get(segment_key, "")
     return resolve_img(str(subset.sample(1, random_state=None)["image_url"].iloc[0]))
