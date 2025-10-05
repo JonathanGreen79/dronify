@@ -1,0 +1,431 @@
+schema:
+  fields:
+    model_key: Stable identifier (lowercase, dashes).
+    marketing_name: Exact product name as sold.
+    series: Mini | Air | Mavic | Matrice | Avata | FPV | Inspire | Phantom
+    mtom_g_nominal: Nominal max take-off mass in grams (approximate if not official).
+    class_marking: C0 | C1 | C2 | C3 | C4 | C5 | C6 | legacy | unknown
+    legacy: True if unclassed/legacy by default.
+    remote_id_builtin: yes | no | unknown
+    weight_band: sub250 | 250to900 | 900to4kg | over4kg
+    typical_open_subcat_capable: Rough default fit in Open category (advisory, not
+      legal advice).
+    year_released: First retail year (approx if unknown).
+    notes: Free text for quirks (e.g., firmware C1 label, accessories).
+  notes: Populate 'class_marking' and 'remote_id_builtin' conservatively; leave 'unknown'
+    until verified.
+data:
+- model_key: mini-5-pro
+  marketing_name: DJI Mini 5 Pro
+  series: mini
+  mtom_g_nominal: 249.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: unknown
+  weight_band: sub250
+  typical_open_subcat_capable:
+  - A1
+  year_released: 2025
+  notes: Successor to Mini 4 Pro; sub-250g. Verify class marking (likely C0).
+  segment: consumer
+- model_key: mini-4-pro
+  marketing_name: DJI Mini 4 Pro
+  series: mini
+  mtom_g_nominal: 249.0
+  class_marking: C0
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: sub250
+  typical_open_subcat_capable:
+  - A1
+  year_released: 2023
+  notes: C0-marked variant; confirm per unit label.
+  segment: consumer
+- model_key: mini-3-pro
+  marketing_name: DJI Mini 3 Pro
+  series: mini
+  mtom_g_nominal: 249.0
+  class_marking: unknown
+  legacy: true
+  remote_id_builtin: unknown
+  weight_band: sub250
+  typical_open_subcat_capable:
+  - A1
+  year_released: 2022
+  notes: Some regions received class labels later; verify unit.
+  segment: consumer
+- model_key: mini-3
+  marketing_name: DJI Mini 3
+  series: mini
+  mtom_g_nominal: 248.0
+  class_marking: unknown
+  legacy: true
+  remote_id_builtin: unknown
+  weight_band: sub250
+  typical_open_subcat_capable:
+  - A1
+  year_released: 2022
+  notes: ''
+  segment: consumer
+- model_key: mini-2-se
+  marketing_name: DJI Mini 2 SE
+  series: mini
+  mtom_g_nominal: 246.0
+  class_marking: unknown
+  legacy: true
+  remote_id_builtin: unknown
+  weight_band: sub250
+  typical_open_subcat_capable:
+  - A1
+  year_released: 2023
+  notes: ''
+  segment: consumer
+- model_key: mini-se
+  marketing_name: DJI Mini SE
+  series: Mini
+  mtom_g_nominal: 242.0
+  class_marking: unknown
+  legacy: true
+  remote_id_builtin: unknown
+  weight_band: sub250
+  typical_open_subcat_capable:
+  - A1
+  year_released: 2021
+  notes: ''
+  segment: null
+- model_key: mini-2
+  marketing_name: DJI Mini 2
+  series: mini
+  mtom_g_nominal: 249.0
+  class_marking: unknown
+  legacy: true
+  remote_id_builtin: unknown
+  weight_band: sub250
+  typical_open_subcat_capable:
+  - A1
+  year_released: 2020
+  notes: ''
+  segment: consumer
+- model_key: mini
+  marketing_name: DJI Mavic Mini
+  series: mini
+  mtom_g_nominal: 249.0
+  class_marking: unknown
+  legacy: true
+  remote_id_builtin: unknown
+  weight_band: sub250
+  typical_open_subcat_capable:
+  - A1
+  year_released: 2019
+  notes: ''
+  segment: consumer
+- model_key: air-3s
+  marketing_name: DJI Air 3S
+  series: air
+  mtom_g_nominal: 720.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: unknown
+  weight_band: 250to900
+  typical_open_subcat_capable:
+  - A2
+  - A3
+  year_released: 2025
+  notes: Placeholder—verify specs/class.
+  segment: consumer
+- model_key: air-3
+  marketing_name: DJI Air 3
+  series: air
+  mtom_g_nominal: 720.0
+  class_marking: C1
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 250to900
+  typical_open_subcat_capable:
+  - A1 (transitional)
+  - A2 (with A2 CofC)
+  - A3
+  year_released: 2023
+  notes: Many units carry C1 via label/firmware; confirm per unit.
+  segment: consumer
+- model_key: air-2s
+  marketing_name: DJI Air 2S
+  series: air
+  mtom_g_nominal: 595.0
+  class_marking: legacy
+  legacy: true
+  remote_id_builtin: unknown
+  weight_band: 250to900
+  typical_open_subcat_capable:
+  - A2 (transitional limits)
+  - A3
+  year_released: 2021
+  notes: ''
+  segment: consumer
+- model_key: mavic-air-2
+  marketing_name: DJI Mavic Air 2
+  series: air
+  mtom_g_nominal: 570.0
+  class_marking: legacy
+  legacy: true
+  remote_id_builtin: unknown
+  weight_band: 250to900
+  typical_open_subcat_capable:
+  - A2 (transitional limits)
+  - A3
+  year_released: 2020
+  notes: ''
+  segment: consumer
+- model_key: mavic-3-pro
+  marketing_name: DJI Mavic 3 Pro
+  series: mavic
+  mtom_g_nominal: 958.0
+  class_marking: C2
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 900to4kg
+  typical_open_subcat_capable:
+  - A3
+  - A2 (if C2 and A2 CofC—EU only)
+  year_released: 2023
+  notes: Weight >900 g; usually A3 unless conditions for A2 met under EU.
+  segment: pro
+- model_key: mavic-3-classic
+  marketing_name: DJI Mavic 3 Classic
+  series: mavic
+  mtom_g_nominal: 895.0
+  class_marking: C1
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 250to900
+  typical_open_subcat_capable:
+  - A1 (C1 allowances)
+  - A2 (with A2 CofC)
+  - A3
+  year_released: 2022
+  notes: C1-labeled via firmware/label; confirm.
+  segment: pro
+- model_key: mavic-3
+  marketing_name: DJI Mavic 3
+  series: mavic
+  mtom_g_nominal: 895.0
+  class_marking: C1
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 250to900
+  typical_open_subcat_capable:
+  - A1 (C1 allowances)
+  - A2 (with A2 CofC)
+  - A3
+  year_released: 2021
+  notes: Many units C1 after updates; verify.
+  segment: pro
+- model_key: mavic-3e
+  marketing_name: DJI Mavic 3E (Enterprise)
+  series: mavic-enterprise
+  mtom_g_nominal: 915.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 900to4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2022
+  notes: Enterprise; typically Specific category for many ops.
+  segment: enterprise
+- model_key: mavic-3t
+  marketing_name: DJI Mavic 3T (Thermal)
+  series: mavic-enterprise
+  mtom_g_nominal: 920.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 900to4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2022
+  notes: Thermal variant; Specific category common.
+  segment: enterprise
+- model_key: mavic-3m
+  marketing_name: DJI Mavic 3M (Multispectral)
+  series: mavic-enterprise
+  mtom_g_nominal: 950.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 900to4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2022
+  notes: Multispectral; agriculture.
+  segment: enterprise
+- model_key: matrice-4e
+  marketing_name: DJI Matrice 4E
+  series: matrice
+  mtom_g_nominal: 3900.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 900to4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2024
+  notes: Enterprise; usually Specific category with OA/SORA.
+  segment: enterprise
+- model_key: matrice-4t
+  marketing_name: DJI Matrice 4T
+  series: matrice
+  mtom_g_nominal: 4000.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: over4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2024
+  notes: Thermal payload; Specific category expected.
+  segment: enterprise
+- model_key: matrice-30
+  marketing_name: DJI Matrice 30
+  series: m-series
+  mtom_g_nominal: 3770.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 900to4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2022
+  notes: Often Specific category.
+  segment: enterprise
+- model_key: matrice-30t
+  marketing_name: DJI Matrice 30T
+  series: m-series
+  mtom_g_nominal: 3770.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 900to4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2022
+  notes: Thermal variant.
+  segment: enterprise
+- model_key: avata-2
+  marketing_name: DJI Avata 2
+  series: avata
+  mtom_g_nominal: 377.0
+  class_marking: C1
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 250to900
+  typical_open_subcat_capable:
+  - A1 (C1 allowances)
+  - A3
+  year_released: 2024
+  notes: Generally not for over-people; check prop guards and local rules.
+  segment: consumer
+- model_key: dji-fpv
+  marketing_name: DJI FPV
+  series: fpv
+  mtom_g_nominal: 795.0
+  class_marking: legacy
+  legacy: true
+  remote_id_builtin: unknown
+  weight_band: 250to900
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2021
+  notes: ''
+  segment: consumer
+- model_key: inspire-3
+  marketing_name: DJI Inspire 3
+  series: inspire
+  mtom_g_nominal: 4310.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: over4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2023
+  notes: Typically Specific category operations.
+  segment: pro
+- model_key: phantom-4-pro-v2
+  marketing_name: DJI Phantom 4 Pro V2.0
+  series: Phantom
+  mtom_g_nominal: 1375.0
+  class_marking: legacy
+  legacy: true
+  remote_id_builtin: unknown
+  weight_band: 900to4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2018
+  notes: ''
+  segment: null
+- model_key: dji-flip
+  marketing_name: DJI Flip
+  series: flip
+  mtom_g_nominal: .nan
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: unknown
+  weight_band: sub250
+  typical_open_subcat_capable:
+  - A1
+  year_released: 2025
+  notes: Foldable prop guards; treat as sub-250 until confirmed.
+  segment: consumer
+- model_key: dji-neo
+  marketing_name: DJI Neo
+  series: neo
+  mtom_g_nominal: 135.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: unknown
+  weight_band: sub250
+  typical_open_subcat_capable:
+  - A1
+  year_released: 2025
+  notes: Approx 135 g selfie drone with prop guards (per product marketing).
+  segment: consumer
+- model_key: m300-rtk
+  marketing_name: DJI M300 RTK
+  series: m-series
+  mtom_g_nominal: 3700.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 900to4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2020
+  notes: Typical Specific-category use (OA/SORA).
+  segment: enterprise
+- model_key: m350-rtk
+  marketing_name: DJI M350 RTK
+  series: m-series
+  mtom_g_nominal: 3850.0
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: 'yes'
+  weight_band: 900to4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2023
+  notes: Successor to M300; Specific-category common.
+  segment: enterprise
+- model_key: m400
+  marketing_name: DJI M400
+  series: m-series
+  mtom_g_nominal: .nan
+  class_marking: unknown
+  legacy: false
+  remote_id_builtin: unknown
+  weight_band: 900to4kg
+  typical_open_subcat_capable:
+  - A3
+  year_released: 2024
+  notes: Placeholder model entry per requested taxonomy.
+  segment: enterprise

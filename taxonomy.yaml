@@ -1,0 +1,32 @@
+segments:
+- key: consumer
+  label: Consumer
+  series:
+  - key: mini
+    label: Mini Series
+  - key: flip
+    label: Flip Series
+  - key: neo
+    label: Neo Series
+  - key: air
+    label: Air Series
+  - key: avata
+    label: Avata Series
+  - key: fpv
+    label: FPV Series
+- key: pro
+  label: Professional (Pro)
+  series:
+  - key: inspire
+    label: Inspire Series
+  - key: mavic
+    label: Mavic Series
+- key: enterprise
+  label: Enterprise
+  series:
+  - key: m-series
+    label: M Series
+  - key: mavic-enterprise
+    label: Mavic Enterprise Series
+  - key: matrice
+    label: Matrice Series
