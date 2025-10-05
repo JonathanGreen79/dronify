@@ -37,7 +37,7 @@ def load_data():
 
     # Normalized
     df["segment_norm"] = df["segment"].astype(str).str.strip().str.lower()
-    df["series_norm"] = df["series"].astype(str).str.strip().str.lower()
+    df["series_norm"]  = df["series"].astype(str).str.strip().str.lower()
 
     return df, taxonomy
 
@@ -107,12 +107,17 @@ section[data-testid="stSidebar"] label p { font-size: .9rem; margin: 0; }
 /* Three-cell GRID per row so all bricks align (same row height) */
 .grid3 { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; align-items: stretch; }
 .grid3 > div { display:flex; }
-.grid3 .card-outer { flex:1 1 auto; }
 
-/* Column headers row */
+/* Column headers row + dividers */
 .grid3-headers { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; margin-bottom: 6px; }
 .grid3-headers .hdrcell { font-weight:800; font-size:1.15rem; color:#111827; }
 
+/* Vertical dividers between columns */
+.divided.grid3 > div:not(:first-child),
+.divided.grid3-headers > div:not(:first-child) {
+  border-left: 1px solid #EDEFF3;
+  padding-left: 12px;
+}
 </style>
 """,
     unsafe_allow_html=True,
@@ -132,8 +137,8 @@ def get_qp():
 
 qp = get_qp()
 segment = qp.get("segment")
-series = qp.get("series")
-model = qp.get("model")
+series  = qp.get("series")
+model   = qp.get("model")
 
 df, taxonomy = load_data()
 
@@ -167,12 +172,11 @@ def models_for(segment_key: str, series_key: str):
     seg_l = str(segment_key).strip().lower()
     ser_l = str(series_key).strip().lower()
     subset = df[(df["segment_norm"] == seg_l) & (df["series_norm"] == ser_l)].copy()
-    # Natural-ish sort by marketing name
     subset["name_key"] = (
         subset["marketing_name"]
         .astype(str)
         .str.lower()
-        .str.replace(r"\d+", lambda m: f"{int(m.group(0)):06d}", regex=True)
+        .str.replace(r"\\d+", lambda m: f"{int(m.group(0)):06d}", regex=True)
     )
     subset = subset.sort_values(
         by=["name_key", "marketing_name"], kind="stable", ignore_index=True
@@ -182,17 +186,17 @@ def models_for(segment_key: str, series_key: str):
 
 # ---------- Brick rendering ----------
 def pill_ok(txt, title=None):
-    t = f" title=\"{title}\"" if title else ""
+    t = f" title=\\"{title}\\"" if title else ""
     return f"<span class='pill pill-ok'{t}>{txt}</span>"
 
 
 def pill_need(txt, title=None):
-    t = f" title=\"{title}\"" if title else ""
+    t = f" title=\\"{title}\\"" if title else ""
     return f"<span class='pill pill-need'{t}>{txt}</span>"
 
 
 def pill_info(txt, title=None):
-    t = f" title=\"{title}\"" if title else ""
+    t = f" title=\\"{title}\\"" if title else ""
     return f"<span class='pill pill-info'{t}>{txt}</span>"
 
 
@@ -262,27 +266,26 @@ def compute_bricks(row: pd.Series, creds: dict, year: int):
     Returns (html_a1, html_a2, html_a3, html_specific)
     """
     has_cam = yesish(row.get("has_camera", "yes"))
-    geo_ok = yesish(row.get("geo_awareness", "unknown"))
-    rid_ok = yesish(row.get("remote_id_builtin", "unknown"))
-    eu = str(row.get("eu_class_marking", "")).strip().lower()
+    geo_ok  = yesish(row.get("geo_awareness", "unknown"))
+    rid_ok  = yesish(row.get("remote_id_builtin", "unknown"))
+    eu      = str(row.get("eu_class_marking", "")).strip().lower()
 
     # Credentials
-    have_op = creds.get("op", False)
-    have_fl = creds.get("flyer", False)
+    have_op   = creds.get("op", False)
+    have_fl   = creds.get("flyer", False)
     have_a1a3 = creds.get("a1a3", False)
-    have_a2 = creds.get("a2", False)
-    have_gvc = creds.get("gvc", False)
-    have_oa = creds.get("oa", False)
+    have_a2   = creds.get("a2", False)
+    have_gvc  = creds.get("gvc", False)
+    have_oa   = creds.get("oa", False)
 
     # ---------- A1 ----------
     pills_a1 = []
-    # Operator ID: needed for camera drones
     if has_cam and not have_op:
-        pills_a1.append(pill_need("Operator ID: Required", "Required for all drones with a camera (registration of the operator)."))
+        pills_a1.append(pill_need("Operator ID: Required",
+                         "Required for all drones with a camera (registration of the operator)."))
     else:
         pills_a1.append(pill_ok("Operator ID: OK"))
 
-    # Flyer ID: needed for camera drones (treated as required for clarity)
     if has_cam and not have_fl:
         pills_a1.append(pill_need("Flyer ID: Required", "Basic test for camera drones."))
     else:
@@ -293,10 +296,10 @@ def compute_bricks(row: pd.Series, creds: dict, year: int):
     pills_a1.append(pill_info("A1/A3: Optional"))
 
     a1_all_ok = all(("Required" not in x) for x in pills_a1)
-    a1_kind = "allowed" if a1_all_ok else "possible"
-    a1_badge = badge("Allowed" if a1_kind == "allowed" else "Possible (additional requirements)", a1_kind)
-    a1_body = f"<div class='small'>{rule_text_a1()}</div><div>{''.join(pills_a1)}</div>"
-    html_a1 = card("A1 — Close to people", a1_badge, a1_body, a1_kind)
+    a1_kind   = "allowed" if a1_all_ok else "possible"
+    a1_badge  = badge("Allowed" if a1_kind == "allowed" else "Possible (additional requirements)", a1_kind)
+    a1_body   = f"<div class='small'>{rule_text_a1()}</div><div>{''.join(pills_a1)}</div>"
+    html_a1   = card("A1 — Close to people", a1_badge, a1_body, a1_kind)
 
     # ---------- A2 ----------
     is_c2 = (eu == "c2")
@@ -309,17 +312,17 @@ def compute_bricks(row: pd.Series, creds: dict, year: int):
         pills_a2.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
 
         a2_all_ok = all(("Required" not in x) for x in pills_a2)
-        a2_kind = "allowed" if a2_all_ok else "possible"
-        a2_badge = badge("Allowed" if a2_kind == "allowed" else "Possible (additional requirements)", a2_kind)
-        a2_body = f"<div class='small'>{rule_text_a2(year)}</div><div>{''.join(pills_a2)}</div>"
-        html_a2 = card("A2 — Close with A2 CofC", a2_badge, a2_body, a2_kind)
+        a2_kind   = "allowed" if a2_all_ok else "possible"
+        a2_badge  = badge("Allowed" if a2_kind == "allowed" else "Possible (additional requirements)", a2_kind)
+        a2_body   = f"<div class='small'>{rule_text_a2(year)}</div><div>{''.join(pills_a2)}</div>"
+        html_a2   = card("A2 — Close with A2 CofC", a2_badge, a2_body, a2_kind)
     else:
         pills_a2.append(pill_info("A2 CofC: N/A"))
         pills_a2.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
         pills_a2.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
         a2_badge = badge("Not applicable", "na")
-        a2_body = f"<div class='small'>{rule_text_a2(year)}</div><div>{''.join(pills_a2)}</div>"
-        html_a2 = card("A2 — Close with A2 CofC", a2_badge, a2_body, "na")
+        a2_body  = f"<div class='small'>{rule_text_a2(year)}</div><div>{''.join(pills_a2)}</div>"
+        html_a2  = card("A2 — Close with A2 CofC", a2_badge, a2_body, "na")
 
     # ---------- A3 ----------
     pills_a3 = []
@@ -329,32 +332,28 @@ def compute_bricks(row: pd.Series, creds: dict, year: int):
     pills_a3.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
 
     a3_all_ok = all(("Required" not in x) for x in pills_a3)
-    a3_kind = "allowed" if a3_all_ok else "possible"
-    a3_badge = badge("Allowed" if a3_kind == "allowed" else "Possible (additional requirements)", a3_kind)
-    a3_body = f"<div class='small'>{rule_text_a3()}</div><div>{''.join(pills_a3)}</div>"
-    html_a3 = card("A3 — Far from people", a3_badge, a3_body, a3_kind)
+    a3_kind   = "allowed" if a3_all_ok else "possible"
+    a3_badge  = badge("Allowed" if a3_kind == "allowed" else "Possible (additional requirements)", a3_kind)
+    a3_body   = f"<div class='small'>{rule_text_a3()}</div><div>{''.join(pills_a3)}</div>"
+    html_a3   = card("A3 — Far from people", a3_badge, a3_body, a3_kind)
 
     # ---------- Specific (OA / GVC) ----------
     pills_sp = []
     pills_sp.append(pill_need("Operator ID: Required") if not have_op else pill_ok("Operator ID: OK"))
-    pills_sp.append(pill_need("Flyer ID: Required") if not have_fl else pill_ok("Flyer ID: OK"))
-    pills_sp.append(pill_need("GVC: Required") if not have_gvc else pill_ok("GVC: OK"))
-    pills_sp.append(pill_need("OA: Required") if not have_oa else pill_ok("OA: OK"))
-    pills_sp.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
+    pills_sp.append(pill_need("Flyer ID: Required")   if not have_fl else pill_ok("Flyer ID: OK"))
+    pills_sp.append(pill_need("GVC: Required")        if not have_gvc else pill_ok("GVC: OK"))
+    pills_sp.append(pill_need("OA: Required")         if not have_oa else pill_ok("OA: OK"))
+    pills_sp.append(pill_ok("Remote ID: OK")          if rid_ok else pill_need("Remote ID: Required"))
     pills_sp.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
 
     sp_all_ok = all(("Required" not in x) for x in pills_sp)
-    sp_kind = "allowed" if sp_all_ok else "oagvc"
-    sp_badge_lbl = "Allowed" if sp_kind == "allowed" else "Available via OA/GVC"
-    sp_badge = badge(sp_badge_lbl, "allowed" if sp_kind == "allowed" else "oagvc")
-    sp_body = f"<div class='small'>{rule_text_specific()}</div><div>{''.join(pills_sp)}</div>"
-    html_sp = card("Specific — OA / GVC", sp_badge, sp_body, sp_kind)
+    sp_kind   = "allowed" if sp_all_ok else "oagvc"
+    sp_lbl    = "Allowed" if sp_kind == "allowed" else "Available via OA/GVC"
+    sp_badge  = badge(sp_lbl, "allowed" if sp_kind == "allowed" else "oagvc")
+    sp_body   = f"<div class='small'>{rule_text_specific()}</div><div>{''.join(pills_sp)}</div>"
+    html_sp   = card("Specific — OA / GVC", sp_badge, sp_body, sp_kind)
 
     return html_a1, html_a2, html_a3, html_sp
-
-
-def show_html(html: str):
-    st.markdown(html, unsafe_allow_html=True)
 
 
 # ---------- STAGE 1 & 2 ----------
@@ -366,7 +365,10 @@ SEGMENT_HERO = {
 
 
 def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
-    img = f"<div style='width:260px;height:150px;border-radius:10px;background:#F3F4F6;overflow:hidden;display:flex;align-items:center;justify-content:center'><img src='{img_url}' style='width:100%;height:100%;object-fit:cover' /></div>" if img_url else "<div style='width:260px;height:150px;border-radius:10px;background:#F3F4F6'></div>"
+    img = (
+        f"<div style='width:260px;height:150px;border-radius:10px;background:#F3F4F6;overflow:hidden;display:flex;align-items:center;justify-content:center'><img src='{img_url}' style='width:100%;height:100%;object-fit:cover' /></div>"
+        if img_url else "<div style='width:260px;height:150px;border-radius:10px;background:#F3F4F6'></div>"
+    )
     sub_html = f"<div style='margin-top:4px;text-align:center;font-size:.8rem;color:#6B7280'>{sub}</div>" if sub else ""
     return (
         f"<a href='?{qs}' target='_self' rel='noopener' "
@@ -377,7 +379,8 @@ def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
 
 def render_row(title: str, items: list[str]):
     st.markdown(
-        f"<div class='h1'>{title}</div><div style='display:flex;gap:14px;overflow-x:auto;padding:8px 2px'>{''.join(items)}</div>",
+        f"<div class='h1'>{title}</div>"
+        f"<div style='display:flex;gap:14px;overflow-x:auto;padding:8px 2px'>{''.join(items)}</div>",
         unsafe_allow_html=True,
     )
 
@@ -420,6 +423,7 @@ else:
 
     if sel is not None and not sel.empty:
         row = sel.iloc[0]
+
         # Thumbnail + caption
         img_url = resolve_img(row.get("image_url", ""))
         if img_url:
@@ -428,9 +432,8 @@ else:
         # Flags & classes
         eu_flag = resolve_img("images/eu.png")
         uk_flag = resolve_img("images/uk.png")
-        eu_cls = row.get("eu_class_marking", "unknown")
-        uk_cls = row.get("uk_class_marking", "unknown")
-
+        eu_cls  = row.get("eu_class_marking", "unknown")
+        uk_cls  = row.get("uk_class_marking", "unknown")
         st.sidebar.markdown(
             f"""
 <div class='flagline'><img src="{eu_flag}"/><div><b>EU:</b> {eu_cls}</div></div>
@@ -452,12 +455,12 @@ else:
 
         # Credentials (compact)
         st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
-        have_op = st.sidebar.checkbox("Operator ID", value=False, key="c_op")
-        have_fl = st.sidebar.checkbox("Flyer ID (basic test)", value=False, key="c_fl")
+        have_op   = st.sidebar.checkbox("Operator ID", value=False, key="c_op")
+        have_fl   = st.sidebar.checkbox("Flyer ID (basic test)", value=False, key="c_fl")
         have_a1a3 = st.sidebar.checkbox("A1/A3 training (optional)", value=False, key="c_a1a3")
-        have_a2 = st.sidebar.checkbox("A2 CofC", value=False, key="c_a2")
-        have_gvc = st.sidebar.checkbox("GVC", value=False, key="c_gvc")
-        have_oa = st.sidebar.checkbox("OA (Operational Authorisation)", value=False, key="c_oa")
+        have_a2   = st.sidebar.checkbox("A2 CofC", value=False, key="c_a2")
+        have_gvc  = st.sidebar.checkbox("GVC", value=False, key="c_gvc")
+        have_oa   = st.sidebar.checkbox("OA (Operational Authorisation)", value=False, key="c_oa")
         creds = dict(op=have_op, flyer=have_fl, a1a3=have_a1a3, a2=have_a2, gvc=have_gvc, oa=have_oa)
 
         # Legend in sidebar
@@ -474,14 +477,14 @@ else:
             unsafe_allow_html=True,
         )
 
-        # --------- Compute all bricks up-front ---------
+        # --------- Compute all bricks ---------
         a_now = compute_bricks(row, creds, 2025)
         a_26  = compute_bricks(row, creds, 2026)
         a_28  = compute_bricks(row, creds, 2028)
 
-        # Headers row (NOW | 2026 | 2028)
+        # ---------- HEADERS (NOW | 2026 | 2028) with column dividers ----------
         st.markdown(
-            "<div class='grid3-headers'>"
+            "<div class='grid3-headers divided'>"
             "<div class='hdrcell'>NOW</div>"
             "<div class='hdrcell'>2026</div>"
             "<div class='hdrcell'>2028 (planned)</div>"
@@ -491,37 +494,34 @@ else:
 
         # Row 1: A1 across 3 cells
         st.markdown(
-            "<div class='grid3'>"
+            "<div class='grid3 divided'>"
             f"<div>{a_now[0]}</div>"
             f"<div>{a_26[0]}</div>"
             f"<div>{a_28[0]}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
-
         # Row 2: A2 across 3 cells
         st.markdown(
-            "<div class='grid3'>"
+            "<div class='grid3 divided'>"
             f"<div>{a_now[1]}</div>"
             f"<div>{a_26[1]}</div>"
             f"<div>{a_28[1]}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
-
         # Row 3: A3 across 3 cells
         st.markdown(
-            "<div class='grid3'>"
+            "<div class='grid3 divided'>"
             f"<div>{a_now[2]}</div>"
             f"<div>{a_26[2]}</div>"
             f"<div>{a_28[2]}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
-
         # Row 4: Specific across 3 cells
         st.markdown(
-            "<div class='grid3'>"
+            "<div class='grid3 divided'>"
             f"<div>{a_now[3]}</div>"
             f"<div>{a_26[3]}</div>"
             f"<div>{a_28[3]}</div>"
@@ -530,7 +530,7 @@ else:
         )
 
     else:
-        # No model selected -> grid of cards (two-row horizontal grid visual)
+        # No model selected -> models grid
         st.markdown(f"<div class='h1'>Choose a drone ({seg_label} → {ser_label})</div>", unsafe_allow_html=True)
         models = models_for(segment, series)
         items = []
@@ -552,7 +552,6 @@ else:
                     img_url=resolve_img(r.get("image_url", "")),
                 )
             )
-        # Render as horizontal wrap
         st.markdown(
             f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
             unsafe_allow_html=True,
