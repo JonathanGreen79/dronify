@@ -32,12 +32,11 @@ def load_data():
 
 df, taxonomy = load_data()
 
-# ---------- Query-param state (pure in-tab updates) ----------
+# ---------- Query-param state ----------
 def get_qp():
     try:
         return dict(st.query_params)  # Streamlit ≥1.32
     except Exception:
-        # legacy fallback
         return {k: (v[0] if isinstance(v, list) else v)
                 for k, v in st.experimental_get_query_params().items()}
 
@@ -87,16 +86,13 @@ def models_for(segment_key: str, series_key: str):
     subset["series_sort"] = subset["series"].astype(str)
     subset["name_sort"]   = subset["marketing_name"].astype(str)
 
-    # sort with a single key function applied to the column being sorted
     subset = subset.sort_values(
         by=["series_sort", "name_sort"],
         key=lambda col: col.map(natural_key),
         ignore_index=True
     )
 
-    # drop helpers (optional)
-    subset = subset.drop(columns=["series_sort", "name_sort"])
-    return subset
+    return subset.drop(columns=["series_sort", "name_sort"])
 
 def random_image_for_series(segment_key: str, series_key: str) -> str:
     """Pick a random image from models in the given segment+series."""
@@ -165,17 +161,21 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- Card (same tab) ----------
-# We update URL query params *in place* using Streamlit's postMessage API.
+# ---------- Card (same-tab navigation) ----------
 def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
     """
     qs example: 'segment=consumer' or 'segment=consumer&series=mini'
+    We update the URL in place and reload the page in the SAME TAB.
     """
     img = f"<div class='img'><img src='{img_url}' alt=''/></div>" if img_url else "<div class='img'></div>"
+    # Build safe JS to set ?query and reload
+    safe_qs = qs.replace("'", "%27")
     js = (
-        "window.parent.postMessage("
-        "{type: 'streamlit:setQueryParams', query: '" + qs.replace("'", "%27") + "'}"
-        ", '*'); return false;"
+        "const u = new URL(window.location);"
+        f"u.search='?{safe_qs}';"
+        "window.history.pushState({},'',u);"
+        "window.location.reload();"
+        "return false;"
     )
     sub_html = f"<div class='sub'>{sub}</div>" if sub else ""
     return f"<a class='card' href='#' onclick=\"{js}\">{img}<div class='title'>{title}</div>{sub_html}</a>"
