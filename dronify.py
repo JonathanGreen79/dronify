@@ -1,4 +1,6 @@
 # dronify.py — 3-column compliance view with era-aware badges + hover tooltips
+# (Updated: Current-era Remote ID/Geo show green if the drone has them;
+#           explicit NOW/2026/2028 headers; improved legend wording)
 
 import streamlit as st
 import pandas as pd
@@ -20,7 +22,6 @@ def load_data():
     dataset = load_yaml(DATASET_PATH)
     taxonomy = load_yaml(TAXONOMY_PATH)
     df = pd.DataFrame(dataset["data"])
-    # normalize columns expected by UI
     for col in [
         "model_key","marketing_name","segment","series","mtom_g_nominal",
         "eu_class_marking","uk_class_marking","year_released",
@@ -29,7 +30,6 @@ def load_data():
     ]:
         if col not in df.columns:
             df[col] = ""
-    # numeric where we can
     df["mtom_g_nominal"] = pd.to_numeric(df["mtom_g_nominal"], errors="coerce")
     return df, taxonomy
 
@@ -56,11 +56,10 @@ def resolve_img(url: str) -> str:
     if not url:
         return ""
     low = url.lower()
-    if low.startswith("http://") or low.startswith("https://") or low.startswith("data:"):
+    if low.startswith(("http://","https://","data:")):
         return url
     if low.startswith("images/"):
         return RAW_BASE + url.split("/",1)[1]
-    # treat bare filename as images/
     return RAW_BASE + url.lstrip("/")
 
 SEGMENT_HERO = {
@@ -119,9 +118,7 @@ st.markdown("""
 .badge-missing { background:#FEE2E2; color:#7F1D1D; border-color:#FCA5A5; }
 .badge-neutral { background:#F3F4F6; color:#374151; border-color:#E5E7EB; }
 
-/* section legends and headers */
-.col-header { font-weight:800; font-size:1.1rem; margin-bottom:8px; }
-.col-divider { border-right:1px solid #E5E7EB; }
+/* legend */
 .legend { display:flex; gap:10px; flex-wrap:wrap; margin-top:.75rem; }
 .legend .chip { font-weight:600; }
 .small { font-size:.86em; color:#4B5563; }
@@ -152,14 +149,14 @@ def badge(label, state="ok", tooltip:str|None=None):
 # -------------------- Stage 1/2 helpers --------------------
 def series_defs_for(segment_key: str):
     seg = next(s for s in taxonomy["segments"] if s["key"] == segment_key)
-    # only include series that have at least 1 model
     present = set(df.loc[df["segment"]==segment_key, "series"].dropna().unique().tolist())
     return [s for s in seg["series"] if s["key"] in present]
 
 def models_for(segment_key: str, series_key: str):
     subset = df[(df["segment"]==segment_key) & (df["series"]==series_key)].copy()
-    # natural-ish sort on marketing_name
-    subset["name_key"] = subset["marketing_name"].str.lower().str.replace(r"\d+", lambda m: f"{int(m.group(0)):06d}", regex=True)
+    subset["name_key"] = subset["marketing_name"].str.lower().str.replace(
+        r"\d+", lambda m: f"{int(m.group(0)):06d}", regex=True
+    )
     subset = subset.sort_values(by=["name_key","marketing_name"], kind="stable", ignore_index=True)
     return subset.drop(columns=["name_key"])
 
@@ -172,25 +169,18 @@ def random_image_for_series(segment_key: str, series_key: str) -> str:
 
 # -------------------- Era rules + tooltips --------------------
 ERA_LIST = [
-    ("current","Current"),
+    ("current","Now"),
     ("2026","2026"),
     ("2028","2028 (planned)"),
 ]
 
 def needs_rid(era: str) -> bool:
-    # Remote ID needed from 2026+ for UK1/2/3/5/6; we treat “Open” usage broadly → yes after 2026
     return era in ("2026","2028")
 
 def needs_geo(era: str, mtom_g: float|None, has_cam: bool) -> bool:
-    # 2026: geo-awareness for UK1/2/3. For simplification we require it from 2026 in Open usage.
-    # 2028: extends to UK0 >=100g camera drones — our consumer drones will mostly be >=100g.
-    if era=="current":
-        return False
-    if era=="2026":
-        return True
-    # 2028 planned
-    if era=="2028":
-        return True
+    if era=="current": return False
+    if era=="2026":    return True
+    if era=="2028":    return True
     return False
 
 def tooltip_operator(era:str) -> str:
@@ -209,42 +199,37 @@ def tooltip_flyer(era:str) -> str:
 
 def tooltip_rid(era:str) -> str:
     if era=="current":
-        return "Remote ID not generally required in UK Open Category (today)."
+        return "Remote ID not generally required in UK Open Category (today). If your drone has it, great."
     return "Remote ID (Direct) must broadcast drone & operator info in flight."
 
 def tooltip_geo(era:str) -> str:
     if era=="current":
-        return "Geo-awareness not mandatory in UK Open Category (today)."
+        return "Geo-awareness not mandatory in UK Open Category (today). If your drone has it, even better."
     if era=="2026":
         return "From 2026: Geo-awareness is required (e.g., map-based restricted airspace warnings)."
     return "Planned 2028: Geo-awareness also required for some smaller (UK0) drones (≥100 g with camera)."
 
 # -------------------- Brick computation --------------------
 def class_allows_a2(eu_class:str) -> bool:
-    # Typically A2 use requires C2. Treat all others as not applicable.
     return str(eu_class or "").strip().upper()=="C2"
 
 def cred_badges(era:str, row:pd.Series, user:dict):
     """
-    Return list of era-aware requirement badges with tooltip.
-    Status:
-      - 'ok'      → fulfilled
-      - 'missing' → required but user hasn't ticked or drone lacks tech
-      - 'neutral' → not required in this era
+    Return badges + requirement flags.
+    In 'current' era, RID/Geo are not required, but if the drone HAS them,
+    we show them green (ok); otherwise grey (neutral).
     """
     mtom = float(row.get("mtom_g_nominal") or 0)
     has_cam = str(row.get("has_camera") or "yes").lower()=="yes"
 
-    # Which things are required this era?
     rid_req  = needs_rid(era)
     geo_req  = needs_geo(era, mtom, has_cam)
 
-    # Operator/Flyer always required for camera drones (current),
-    # then era refinements (we still gate by user checkboxes).
-    op_required   = True if era=="current" else True
-    flyer_needed  = True if era=="current" else True  # kept simple per our earlier UK notes
-
     out = []
+
+    # Operator/Flyer simple (we keep required across eras per current UK notes)
+    op_required   = True
+    flyer_needed  = True
 
     # Operator ID
     op_state = "ok" if user.get("op_id") else ("missing" if op_required else "neutral")
@@ -256,29 +241,34 @@ def cred_badges(era:str, row:pd.Series, user:dict):
     out.append(badge("Flyer ID: " + ("Have" if fly_state=="ok" else "Required" if fly_state=="missing" else "—"),
                      fly_state, tooltip_flyer(era)))
 
-    # Remote ID tech
+    # Remote ID
     drone_has_rid = str(row.get("remote_id_builtin") or "unknown").lower()=="yes"
-    rid_state = "ok" if (not rid_req or drone_has_rid) else "missing"
-    rid_label = "Remote ID: " + ("OK" if rid_state=="ok" else "Required")
-    out.append(badge(rid_label, rid_state if rid_req else "neutral", tooltip_rid(era)))
+    if rid_req:
+        rid_state = "ok" if drone_has_rid else "missing"
+    else:
+        rid_state = "ok" if drone_has_rid else "neutral"  # <<< show green if drone has it now
+    rid_label = "Remote ID: " + ("OK" if rid_state in ("ok","neutral") and drone_has_rid else ("OK" if rid_state=="ok" else "Required" if rid_req else "—"))
+    out.append(badge(rid_label, rid_state, tooltip_rid(era)))
 
-    # Geo-awareness tech
+    # Geo-awareness
     drone_geo = str(row.get("geo_awareness") or "unknown").lower()=="yes"
-    geo_state = "ok" if (not geo_req or drone_geo) else "missing"
-    geo_label = "Geo-awareness: " + ("Onboard" if geo_state=="ok" else "Required")
-    out.append(badge(geo_label, geo_state if geo_req else "neutral", tooltip_geo(era)))
+    if geo_req:
+        geo_state = "ok" if drone_geo else "missing"
+    else:
+        geo_state = "ok" if drone_geo else "neutral"     # <<< show green if drone has it now
+    geo_label = "Geo-awareness: " + ("Onboard" if (drone_geo or geo_state=="ok") else ("Required" if geo_req else "—"))
+    out.append(badge(geo_label, geo_state, tooltip_geo(era)))
 
     return out, {
         "op_ok": (op_state=="ok"),
         "fly_ok": (fly_state=="ok"),
-        "rid_ok": (rid_state in ("ok","neutral")),
-        "geo_ok": (geo_state in ("ok","neutral")),
+        "rid_ok": (rid_state in ("ok","neutral") if not rid_req else rid_state=="ok"),
+        "geo_ok": (geo_state in ("ok","neutral") if not geo_req else geo_state=="ok"),
     }
 
-def brick_status_allowed(requirements:dict, extra:bool=True):
-    """If all required are ok → 'ok', else 'info' (possible)"""
+def brick_status_allowed(requirements:dict):
     all_ok = requirements["op_ok"] and requirements["fly_ok"] and requirements["rid_ok"] and requirements["geo_ok"]
-    return ("ok" if all_ok else "info"), ("Allowed" if all_ok else "Possible")
+    return ("ok" if all_ok else "info"), ("Allowed" if all_ok else "Possible (needs credentials/tech)")
 
 def render_brick(title:str, desc:str, cred_html:list[str], tone:str, status_label:str, right_tag:str|None=None):
     tone_cls = {"ok":"brick-ok","info":"brick-info","warn":"brick-warn","na":"brick-na"}[tone]
@@ -292,50 +282,46 @@ def render_brick(title:str, desc:str, cred_html:list[str], tone:str, status_labe
     st.markdown(f"<div class='brick {tone_cls}'>{head}<div class='line'></div><div class='small'>{desc}</div><div style='margin-top:6px'>{''.join(cred_html)}</div></div>", unsafe_allow_html=True)
 
 def section_for_era(era_key:str, era_label:str, row:pd.Series, user:dict):
-    col = st.container()
-    with col:
-        st.markdown(f"<div class='col-header'>{era_label}</div>", unsafe_allow_html=True)
+    # VERY explicit column headers so they can't be missed
+    st.markdown(f"### {era_label}")
 
-        # --- A1
+    # --- A1
+    cred_html, req_flags = cred_badges(era_key, row, user)
+    tone, label = brick_status_allowed(req_flags)
+    desc = "Fly close to people; avoid assemblies/crowds. TOAL: sensible separation; follow local restrictions."
+    render_brick("A1 — Close to people", desc, cred_html, tone, label)
+
+    # --- A2
+    can_a2 = class_allows_a2(row.get("eu_class_marking",""))
+    if not can_a2:
         cred_html, req_flags = cred_badges(era_key, row, user)
-        tone, label = brick_status_allowed(req_flags)
-        desc = "Fly close to people; avoid assemblies/crowds. TOAL: sensible separation; follow local restrictions."
-        render_brick("A1 — Close to people", desc, cred_html, tone, label)
-
-        # --- A2
-        can_a2 = class_allows_a2(row.get("eu_class_marking",""))
-        if not can_a2:
-            cred_html, req_flags = cred_badges(era_key, row, user)
-            render_brick("A2 — Close with A2 CofC",
-                         "A2 mainly for C2 drones (sometimes C1 by nuance). This model cannot use A2; consider A1 or A3/Specific.",
-                         cred_html, "na", "Not applicable", right_tag="A2 CofC: N/A")
+        render_brick("A2 — Close with A2 CofC",
+                     "A2 mainly for C2 drones (sometimes C1 by nuance). This model cannot use A2; consider A1 or A3/Specific.",
+                     cred_html, "na", "Not applicable", right_tag="A2 CofC: N/A")
+    else:
+        cred_html, req_flags = cred_badges(era_key, row, user)
+        if req_flags["op_ok"] and req_flags["fly_ok"] and req_flags["rid_ok"] and req_flags["geo_ok"] and user.get("a2_cofc"):
+            tone, label = "ok", "Allowed (A2 CofC)"
         else:
-            cred_html, req_flags = cred_badges(era_key, row, user)
-            # also needs A2 CofC user tick
-            if req_flags["op_ok"] and req_flags["fly_ok"] and req_flags["rid_ok"] and req_flags["geo_ok"] and user.get("a2_cofc"):
-                tone, label = "ok", "Allowed (A2 CofC)"
-            else:
-                tone, label = "info", "Needs A2 CofC"
-            desc = "Stand off from people (C2); keep within A2 limits. TOAL: observe local restrictions."
-            render_brick("A2 — Close with A2 CofC", desc, cred_html, tone, label, right_tag=("A2 CofC: Have" if user.get("a2_cofc") else "A2 CofC: Needed"))
+            tone, label = "info", "Needs A2 CofC"
+        desc = "Stand off from people (C2); keep within A2 limits. TOAL: observe local restrictions."
+        render_brick("A2 — Close with A2 CofC", desc, cred_html, tone, label, right_tag=("A2 CofC: Have" if user.get("a2_cofc") else "A2 CofC: Needed"))
 
-        # --- A3
-        cred_html, req_flags = cred_badges(era_key, row, user)
-        tone, label = brick_status_allowed(req_flags)
-        desc = "Keep ≥ 150 m from residential/commercial/recreational areas. TOAL: well away from uninvolved people and built-up areas."
-        render_brick("A3 — Far from people", desc, cred_html, tone, label)
+    # --- A3
+    cred_html, req_flags = cred_badges(era_key, row, user)
+    tone, label = brick_status_allowed(req_flags)
+    desc = "Keep ≥ 150 m from residential/commercial/recreational areas. TOAL: well away from uninvolved people and built-up areas."
+    render_brick("A3 — Far from people", desc, cred_html, tone, label)
 
-        # --- Specific (OA/GVC)
-        cred_html, req_flags = cred_badges(era_key, row, user)
-        has_all = req_flags["op_ok"] and req_flags["fly_ok"] and req_flags["rid_ok"] and req_flags["geo_ok"] and user.get("gvc") and user.get("oa")
-        tone = "ok" if has_all else "warn"
-        label = "Allowed (OA/GVC)" if has_all else "Available via OA/GVC"
-        if user.get("gvc"): cred_html.append(badge("GVC: Have", "ok"))
-        else:               cred_html.append(badge("GVC: Required", "missing"))
-        if user.get("oa"):  cred_html.append(badge("OA: Have", "ok"))
-        else:               cred_html.append(badge("OA: Required", "missing"))
-        desc = "Risk-assessed operations per OA; distances per ops manual. TOAL & mitigations defined by your approved procedures."
-        render_brick("Specific — OA / GVC", desc, cred_html, tone, label)
+    # --- Specific (OA/GVC)
+    cred_html, req_flags = cred_badges(era_key, row, user)
+    has_all = req_flags["op_ok"] and req_flags["fly_ok"] and req_flags["rid_ok"] and req_flags["geo_ok"] and user.get("gvc") and user.get("oa")
+    tone = "ok" if has_all else "warn"
+    label = "Allowed (OA/GVC)" if has_all else "Available via OA/GVC"
+    cred_html.append(badge("GVC: " + ("Have" if user.get("gvc") else "Required"), "ok" if user.get("gvc") else "missing"))
+    cred_html.append(badge("OA: " + ("Have" if user.get("oa") else "Required"), "ok" if user.get("oa") else "missing"))
+    desc = "Risk-assessed operations per OA; distances per ops manual. TOAL & mitigations defined by your approved procedures."
+    render_brick("Specific — OA / GVC", desc, cred_html, tone, label)
 
 # -------------------- Screen routing --------------------
 if not segment:
@@ -386,7 +372,7 @@ else:
             for k,v in kv:
                 st.sidebar.markdown(f"<div class='sidebar-kv'><b>{k}</b> : {v}</div>", unsafe_allow_html=True)
 
-            # ----- User credentials checkbox panel -----
+            # Credentials checkboxes
             st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
             op_id  = st.sidebar.checkbox("I have an Operator ID", value=False, key="op_id")
             flyer  = st.sidebar.checkbox("I have a Flyer ID (basic test)", value=False, key="flyer_id")
@@ -395,14 +381,11 @@ else:
             gvc    = st.sidebar.checkbox("I have GVC", value=False, key="gvc")
             oa     = st.sidebar.checkbox("I have an OA (Operational Authorisation)", value=False, key="oa")
 
-            user = {
-                "op_id": op_id, "flyer_id": flyer, "a1a3": a1a3, "a2_cofc": a2, "gvc": gvc, "oa": oa
-            }
+            user = {"op_id": op_id, "flyer_id": flyer, "a1a3": a1a3, "a2_cofc": a2, "gvc": gvc, "oa": oa}
 
-            # ----- Main 3 columns with headers + dividers -----
+            # ----- Main columns -----
             c1, c2, c3 = st.columns([1,1,1], gap="large")
-            cols = [c1,c2,c3]
-            for (ek, el), col in zip(ERA_LIST, cols):
+            for (ek, el), col in zip(ERA_LIST, [c1,c2,c3]):
                 with col:
                     section_for_era(ek, el, row, user)
 
@@ -410,7 +393,7 @@ else:
             st.markdown(
                 "<div class='legend'>"
                 f"{chip('Allowed','ok')}"
-                f"{chip('Possible','info')}"
+                f"{chip('Possible (needs credentials/tech)','info')}"
                 f"{chip('Available via OA/GVC','warn')}"
                 f"{chip('Not applicable','na')}"
                 "</div>",
@@ -418,10 +401,8 @@ else:
             )
 
         else:
-            # bad model key → go back to grid
             model = None
 
-    # If no model selected, show two-row card grid
     if not model:
         models = models_for(segment, series)
         items = []
