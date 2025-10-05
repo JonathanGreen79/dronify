@@ -4,6 +4,7 @@ schema:
     marketing_name: Product name
     segment: consumer | pro | enterprise
     series: mini | air | mavic | mavic-enterprise | avata | fpv | inspire | m-series | matrice | neo | flip
+    image_url: Relative filename in /images or full URL
     spec_url: Official DJI spec link (UK)
     operator_id_required: yes | no
     sensor: Camera sensor description
@@ -44,6 +45,7 @@ data:
   marketing_name: DJI Flip
   segment: consumer
   series: flip
+  image_url: dji_flip.jpg
   spec_url: "https://www.dji.com/uk/support/product/flip"
   operator_id_required: "yes"
   sensor: "1/2.3-inch CMOS"
@@ -62,6 +64,7 @@ data:
   marketing_name: DJI Neo
   segment: consumer
   series: neo
+  image_url: dji_neo.jpg
   spec_url: "https://www.dji.com/uk/support/product/neo"
   operator_id_required: "yes"
   sensor: "1/2.3-inch CMOS"
@@ -80,6 +83,7 @@ data:
   marketing_name: DJI Mavic Mini
   segment: consumer
   series: mini
+  image_url: mini_mavic.jpg
   spec_url: "https://www.dji.com/uk/support/product/mavic-mini"
   operator_id_required: "yes"
   sensor: "1/2.3-inch CMOS 12 MP"
@@ -97,6 +101,7 @@ data:
   marketing_name: DJI Mini 2
   segment: consumer
   series: mini
+  image_url: mini_2.jpg
   spec_url: "https://www.dji.com/uk/support/product/mini-2"
   operator_id_required: "yes"
   sensor: "1/2.3-inch CMOS 12 MP"
@@ -114,6 +119,7 @@ data:
   marketing_name: DJI Mini 2 SE
   segment: consumer
   series: mini
+  image_url: mini_2_se.jpg
   spec_url: "https://www.dji.com/uk/support/product/mini-2-se"
   operator_id_required: "yes"
   sensor: "1/2.3-inch CMOS 12 MP"
@@ -131,6 +137,7 @@ data:
   marketing_name: DJI Mini 3
   segment: consumer
   series: mini
+  image_url: mini_3.jpg
   spec_url: "https://www.dji.com/uk/support/product/mini-3-pro"
   operator_id_required: "yes"
   sensor: "1/1.3-inch CMOS 12 MP"
@@ -148,6 +155,7 @@ data:
   marketing_name: DJI Mini 3 Pro
   segment: consumer
   series: mini
+  image_url: mini_3_pro.jpg
   spec_url: "https://www.dji.com/uk/support/product/mini-3-pro"
   operator_id_required: "yes"
   sensor: "1/1.3-inch CMOS 48 MP"
@@ -165,6 +173,7 @@ data:
   marketing_name: DJI Mini 4 Pro
   segment: consumer
   series: mini
+  image_url: mini_4_pro.jpg
   spec_url: "https://www.dji.com/uk/mini-4-pro/specs"
   operator_id_required: "yes"
   sensor: "1/1.3-inch CMOS 48 MP"
@@ -182,6 +191,7 @@ data:
   marketing_name: DJI Mini 5 Pro
   segment: consumer
   series: mini
+  image_url: mini_5_pro.jpg
   spec_url: "https://www.dji.com/uk/mini-5-pro/specs"
   operator_id_required: "yes"
   sensor: "1-inch CMOS 50 MP"
@@ -199,6 +209,7 @@ data:
   marketing_name: DJI Air 2S
   segment: consumer
   series: air
+  image_url: air_2s.jpg
   spec_url: "https://www.dji.com/uk/support/product/air-2s"
   operator_id_required: "yes"
   sensor: "1-inch CMOS 20 MP"
@@ -216,6 +227,7 @@ data:
   marketing_name: DJI Air 3
   segment: consumer
   series: air
+  image_url: air_3.png
   spec_url: "https://www.dji.com/uk/support/product/air-3"
   operator_id_required: "yes"
   sensor: "Dual 1/1.3-inch CMOS 48 MP"
@@ -233,6 +245,7 @@ data:
   marketing_name: DJI Air 3S
   segment: consumer
   series: air
+  image_url: air_3s.png
   spec_url: "https://www.dji.com/uk/support/product/air-3s"
   operator_id_required: "yes"
   sensor: "1-inch CMOS 20 MP"
@@ -250,6 +263,7 @@ data:
   marketing_name: DJI Avata
   segment: consumer
   series: avata
+  image_url: avata.jpg
   spec_url: "https://www.dji.com/uk/support/product/avata"
   operator_id_required: "yes"
   sensor: "1/1.7-inch CMOS 48 MP"
@@ -267,6 +281,7 @@ data:
   marketing_name: DJI Avata 2
   segment: consumer
   series: avata
+  image_url: avata_2.jpg
   spec_url: "https://www.dji.com/uk/support/product/avata-2"
   operator_id_required: "yes"
   sensor: "1/1.3-inch CMOS 12 MP"
@@ -284,6 +299,7 @@ data:
   marketing_name: DJI FPV
   segment: consumer
   series: fpv
+  image_url: fpv.jpg
   spec_url: "https://www.dji.com/uk/support/product/fpv"
   operator_id_required: "yes"
   sensor: "1/2.3-inch CMOS 12 MP"
@@ -302,6 +318,7 @@ data:
   marketing_name: DJI Mavic 3
   segment: pro
   series: mavic
+  image_url: ""   # add e.g. mavic_3.jpg when uploaded
   spec_url: "https://www.dji.com/uk/support/product/mavic-3"
   operator_id_required: "yes"
   sensor: "4/3-inch CMOS (Hasselblad) + 1/2-inch tele"
@@ -320,6 +337,7 @@ data:
   marketing_name: DJI Mavic 3 Classic
   segment: pro
   series: mavic
+  image_url: ""   # add when uploaded
   spec_url: "https://www.dji.com/uk/support/product/mavic-3-classic"
   operator_id_required: "yes"
   sensor: "4/3-inch CMOS Hasselblad 20 MP"
@@ -337,6 +355,7 @@ data:
   marketing_name: DJI Mavic 3 Pro
   segment: pro
   series: mavic
+  image_url: ""   # add when uploaded
   spec_url: "https://www.dji.com/uk/support/product/mavic-3-pro"
   operator_id_required: "yes"
   sensor: "Triple-camera system (4/3 + 1/1.3 + 1/2)"
@@ -353,6 +372,7 @@ data:
   marketing_name: DJI Inspire 3
   segment: pro
   series: inspire
+  image_url: ""   # add when uploaded
   spec_url: "https://www.dji.com/uk/support/product/inspire-3"
   operator_id_required: "yes"
   sensor: "Full-frame Zenmuse X9-8K Air"
@@ -370,6 +390,7 @@ data:
   marketing_name: DJI Mavic 3E (Enterprise)
   segment: enterprise
   series: mavic-enterprise
+  image_url: ""   # add when uploaded
   spec_url: "https://www.dji.com/uk/mavic-3-enterprise/specs"
   operator_id_required: "yes"
   sensor: "4/3-inch CMOS + 1/2 telephoto"
@@ -386,6 +407,7 @@ data:
   marketing_name: DJI Mavic 3T (Thermal)
   segment: enterprise
   series: mavic-enterprise
+  image_url: ""   # add when uploaded
   spec_url: "https://www.dji.com/uk/mavic-3-enterprise/specs"
   operator_id_required: "yes"
   sensor: "4/3-inch CMOS + tele + thermal 640×512"
@@ -402,6 +424,7 @@ data:
   marketing_name: DJI Matrice 30
   segment: enterprise
   series: m-series
+  image_url: ""   # add when uploaded
   spec_url: "https://www.dji.com/uk/matrice-30/specs"
   operator_id_required: "yes"
   sensor: "Wide + tele + laser rangefinder"
@@ -418,6 +441,7 @@ data:
   marketing_name: DJI Matrice 4T
   segment: enterprise
   series: matrice
+  image_url: ""   # add when uploaded
   spec_url: "https://www.dji.com/uk/matrice-4t/specs"
   operator_id_required: "yes"
   sensor: "Wide + zoom + thermal + laser rangefinder"
@@ -434,6 +458,7 @@ data:
   marketing_name: DJI M350 RTK
   segment: enterprise
   series: m-series
+  image_url: ""   # add when uploaded
   spec_url: "https://www.dji.com/uk/matrice-350-rtk/specs"
   operator_id_required: "yes"
   sensor: "Payload agnostic"
@@ -445,3 +470,4 @@ data:
   uk_class_marking: "C3"
   year_released: 2023
   notes: "Heavy-lift industrial drone; Specific category."
+
