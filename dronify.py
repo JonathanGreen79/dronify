@@ -1,4 +1,4 @@
-# dronify.py — “last good” UI + flags + badges + three-column rule panel (Now / 2026 / 2028)
+# dronify.py — working UI + flags + badges + enriched 3-column compliance matrix
 import re
 import random
 import streamlit as st
@@ -21,6 +21,8 @@ def load_data():
     dataset = load_yaml(DATASET_PATH)
     taxonomy = load_yaml(TAXONOMY_PATH)
     df = pd.DataFrame(dataset["data"])
+
+    # Ensure columns exist so UI never breaks
     for col in (
         "image_url","segment","series",
         "class_marking","weight_band",
@@ -28,10 +30,11 @@ def load_data():
         "eu_class_marking","uk_class_marking",
         "remote_id_builtin","year_released",
         "notes","operator_id_required","geo_awareness",
-        "has_camera" # optional; defaults assumed if missing
+        "has_camera" # optional override
     ):
         if col not in df.columns:
             df[col] = ""
+
     df["segment_norm"] = df["segment"].astype(str).str.strip().str.lower()
     df["series_norm"]  = df["series"].astype(str).str.strip().str.lower()
     return df, taxonomy
@@ -56,10 +59,8 @@ def resolve_img(url: str) -> str:
     url = (url or "").strip()
     if not url: return ""
     low = url.lower()
-    if low.startswith(("http://","https://","data:")):
-        return url
-    if low.startswith("images/"):
-        return RAW_BASE + url.split("/",1)[1]
+    if low.startswith(("http://","https://","data:")): return url
+    if low.startswith("images/"): return RAW_BASE + url.split("/",1)[1]
     return RAW_BASE + url.lstrip("/")
 
 SEGMENT_HERO = {
@@ -132,26 +133,31 @@ st.markdown("""
 .flag-text{font-weight:700;color:#1F2937;}
 .kv-icon{font-size:1.05rem;display:inline-block;width:1.35rem;text-align:center;}
 
-/* rule panel (three columns) */
+/* rule matrix */
 .rule-grid{
   display:grid;
-  grid-template-columns: repeat(3, minmax(260px, 1fr));
-  gap:14px; margin-top:12px;
+  grid-template-columns: repeat(3, minmax(280px, 1fr));
+  gap:16px; margin-top:14px;
 }
 .rule-card{
   border:1px solid #E5E7EB; border-radius:14px; padding:14px; background:#fff;
   box-shadow:0 4px 14px rgba(0,0,0,.04);
 }
-.rule-title{font-weight:800;color:#111827;margin-bottom:6px;}
-.rule-head{font-weight:700;margin:2px 0 8px 0;}
-.pill{display:inline-block;padding:4px 10px;border-radius:999px;font-weight:700;font-size:.8rem;margin-right:6px;margin-bottom:6px;}
-.pill-ok{background:#DCFCE7;color:#14532D;}
-.pill-warn{background:#FEF3C7;color:#92400E;}
-.pill-bad{background:#FEE2E2;color:#991B1B;}
-.rule-note{color:#374151;font-size:.92rem;margin:6px 0;}
-.rule-ul{margin:6px 0 0 1rem; padding:0;}
-.rule-ul li{margin:.2rem 0;}
-.rule-foot{color:#6B7280;font-size:.8rem;margin-top:8px;}
+.rule-title{font-weight:800;color:#111827;margin-bottom:8px;}
+.rule-chip{display:inline-block;padding:4px 10px;border-radius:999px;background:#F3F4F6;color:#374151;font-weight:700;font-size:.8rem;margin-right:6px;margin-bottom:8px;}
+.rule-table{width:100%;border-collapse:separate;border-spacing:0 6px;}
+.rule-row{display:grid;grid-template-columns: 120px 1fr;align-items:center;gap:10px;padding:6px 8px;border-radius:10px;background:#F9FAFB;}
+.rule-row .rlabel{font-weight:700;color:#374151;}
+.rule-row .rval{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.tick{font-weight:900;color:#16A34A;}  /* ✔ */
+.warn{font-weight:900;color:#D97706;}   /* ! */
+.nope{font-weight:900;color:#DC2626;}   /* ✖ */
+.pill{display:inline-block;padding:3px 8px;border-radius:999px;font-weight:700;font-size:.78rem;}
+.p-ok{background:#DCFCE7;color:#14532D;}
+.p-warn{background:#FEF3C7;color:#92400E;}
+.p-no{background:#FEE2E2;color:#991B1B;}
+.small{color:#6B7280;font-size:.85rem;}
+.hr{height:1px;background:#E5E7EB;margin:10px 0;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -172,8 +178,11 @@ def _float(v):
     try: return float(v)
     except: return None
 
-def infer_weight_band(row):
-    g = _float(row.get("mtom_g_nominal"))
+def weight_g(row):
+    return _float(row.get("mtom_g_nominal"))
+
+def weight_band(row):
+    g = weight_g(row)
     if g is None: return None
     if g < 250: return "sub250"
     if g < 900: return "250to900"
@@ -181,164 +190,210 @@ def infer_weight_band(row):
     return "over4kg"
 
 def has_camera(row):
-    # Conservative: most DJI consumers have cameras. Allow override via YAML has_camera=yes/no.
     v = str(row.get("has_camera","")).strip().lower()
     if v in ("yes","true","1"): return True
     if v in ("no","false","0"): return False
-    # default assumptions
-    seg = str(row.get("segment","")).lower()
-    series = str(row.get("series","")).lower()
-    if seg in ("consumer","pro","enterprise"): return True
+    # default: DJI consumer/pro/enterprise have cameras
     return True
 
-def summarize_now(row):
-    """Current (2025) UK Open cat with EU class marks effectively usable; legacy transitional still in effect."""
-    wb = infer_weight_band(row)
-    eu = (row.get("eu_class_marking") or row.get("class_marking") or "").upper()
-    uk = (row.get("uk_class_marking") or "").upper()
-    out = {"title":"Now","headline":[],"bullets":[],"notes":[],"status":"ok"}
-    # Headline logic
-    if eu=="C0" or wb=="sub250":
-        out["headline"].append("A1 (close to people; no crowds)")
-        out["bullets"] += ["<120 m AGL & VLOS","Avoid assemblies of people"]
-    elif eu=="C1":
-        out["headline"].append("A1 / A2 (with A2 CofC) / A3")
-        out["bullets"] += ["Avoid deliberate overflight of people","A2: 5–30 m with A2 CofC","A3 always permitted away from people"]
-    elif eu in ("C2","C3","C4"):
-        out["headline"].append("A2 (with A2 CofC) / A3")
-        out["bullets"] += ["A2: 5–30 m with A2 CofC","A3: ≥150 m from built-up areas"]
-        out["status"]="warn"
-    else:
-        # Legacy / unknown
-        if wb=="sub250":
-            out["headline"].append("A1 (legacy sub-250)")
-            out["bullets"] += ["No crowds","Be considerate near people"]
-        elif wb in ("250to900","900to4kg","over4kg"):
-            out["headline"].append("Likely A3 (legacy)")
-            out["bullets"] += ["No uninvolved people nearby","≥150 m from residential/industrial/commercial"]
-            out["status"]="warn"
-        else:
-            out["headline"].append("Check category")
-            out["bullets"] += ["Provide weight/class to refine"]
-            out["status"]="bad"
-    out["notes"].append("EU class marks usable in UK at present. Transitional allowances apply.")
-    return out
-
-def summarize_2026(row):
-    """From 1 Jan 2026 — UK class marks begin; EU marks recognised until 31 Dec 2027; transitional extended."""
-    wb = infer_weight_band(row)
-    eu = (row.get("eu_class_marking") or row.get("class_marking") or "").upper()
-    uk = (row.get("uk_class_marking") or "").upper()
-    out = {"title":"From 1 Jan 2026","headline":[],"bullets":[],"notes":[],"status":"ok"}
-    # Prefer UK class if present
-    if uk.startswith("UK"):
-        k = uk
-        if k=="UK0":
-            out["headline"].append("A1")
-            out["bullets"]+=["Close to people; no crowds","Geo-awareness expected","<120 m & VLOS"]
-        elif k=="UK1":
-            out["headline"].append("A1 / A2")
-            out["bullets"]+=["Avoid overflight; 5–30 m in A2","Remote ID & Geo-awareness"]
-        elif k=="UK2":
-            out["headline"].append("A2 / A3")
-            out["bullets"]+=["A2 with 5–30 m","A3 ≥150 m from built-up","Remote ID & Geo-awareness"]
-        elif k in ("UK3","UK4","UK5","UK6"):
-            out["headline"].append("A3 / Specific")
-            out["bullets"]+=["A3: away from people & built-up","Specific category likely for many ops"]
-            out["status"]="warn"
-        else:
-            out["headline"].append("Depends on UK class")
-            out["status"]="warn"
-    else:
-        # EU marks still recognised in UK during 2026–2027
-        if eu=="C0" or wb=="sub250":
-            out["headline"].append("A1")
-            out["bullets"]+=["No crowds","Lights at night"]
-        elif eu=="C1":
-            out["headline"].append("A1 / A2 / A3")
-            out["bullets"]+=["A2: 5–30 m with A2 CofC"]
-        elif eu in ("C2","C3","C4"):
-            out["headline"].append("A2 (with A2 CofC) / A3")
-            out["status"]="warn"
-        else:
-            # Legacy extended
-            if wb=="sub250":
-                out["headline"].append("A1 (legacy)")
-            else:
-                out["headline"].append("Likely A3 (legacy)")
-                out["status"]="warn"
-            out["bullets"]+=["Transitional rules extended; check limits"]
-    # Advisory add-ons
-    out["notes"] += ["Remote ID mandatory for many UK1–UK3/5/6.","Geo-awareness required for UK1–UK3."]
-    return out
-
-def summarize_2028(row):
-    """From 1 Jan 2028 — EU marks no longer recognised; Remote ID expands; Geo for UK0 ≥100g camera."""
-    wb = infer_weight_band(row)
-    uk = (row.get("uk_class_marking") or "").upper()
+def flyer_operator_by_phase(row, phase):
+    """Return strings for Flyer ID / Operator ID per phase (now/2026/2028)."""
+    g = weight_g(row) or 0
     cam = has_camera(row)
-    out = {"title":"From 1 Jan 2028 (planned)","headline":[],"bullets":[],"notes":[],"status":"ok"}
-    if uk.startswith("UK"):
-        if uk=="UK0":
-            out["headline"].append("A1")
-            out["bullets"]+=["No crowds","Geo-awareness required ≥100 g w/camera"]
-        elif uk=="UK1":
-            out["headline"].append("A1 / A2")
-            out["bullets"]+=["Avoid overflight; A2 5–30 m","Remote ID & Geo-awareness"]
-        elif uk=="UK2":
-            out["headline"].append("A2 / A3")
-            out["bullets"]+=["A2 with A2 CofC","A3 ≥150 m from built-up","Remote ID & Geo-awareness"]
-        elif uk in ("UK3","UK4","UK5","UK6"):
-            out["headline"].append("A3 / Specific")
-            out["bullets"]+=["Specific category likely for many ops"]
-            out["status"]="warn"
-        else:
-            out["headline"].append("Depends on UK class")
-            out["status"]="warn"
+
+    if phase == "now":
+        flyer = (cam or g >= 250)
+        operator = cam or g >= 250  # operator ID effectively required for camera drones
     else:
-        # Legacy without UK class in 2028
-        if wb=="sub250":
-            out["headline"].append("A1 (legacy)")
-            out["bullets"]+=["Geo-awareness likely if ≥100 g & camera","Remote ID may be required if ≥100 g & camera"]
-            out["status"]="warn"
-        elif wb:
-            out["headline"].append("Likely A3 (legacy)")
-            out["bullets"]+=["EU class no longer recognised","Remote ID required ≥100 g & camera","Specific category may be needed"]
-            out["status"]="bad"
+        # 2026 and 2028: Flyer ID threshold lowered to 100 g with camera
+        flyer = (g >= 100 and cam) or (g >= 250)  # keep ≥250 safety net
+        operator = cam or g >= 250
+
+    return ("Yes" if flyer else "No"), ("Yes" if operator else "No")
+
+def class_in_effect_by_phase(row, phase):
+    eu = (row.get("eu_class_marking") or row.get("class_marking") or "").upper().strip()
+    uk = (row.get("uk_class_marking") or "").upper().strip()
+    if phase == "now":
+        return uk or eu or "—"
+    if phase == "2026":
+        # EU recognised until 31 Dec 2027; prefer UK if present
+        return uk or (eu if eu else "Legacy / —")
+    if phase == "2028":
+        # EU no longer recognised automatically
+        return uk or "Legacy / —"
+    return "—"
+
+def allow_map(symbol_ok=True, symbol_warn=True, symbol_no=True):
+    return {
+        "ok": "<span class='tick'>✔︎</span>",
+        "warn": "<span class='warn'>!</span>",
+        "no": "<span class='nope'>✖</span>",
+    }
+
+def capability_by_phase(row, phase):
+    """Return per subcategory: 'ok' | 'warn' | 'no', with notes list."""
+    wb = weight_band(row)
+    eu = (row.get("eu_class_marking") or row.get("class_marking") or "").upper().strip()
+    uk = (row.get("uk_class_marking") or "").upper().strip()
+    out = {"A1":"no","A2":"no","A3":"no","Specific":"no", "notes":[]}
+
+    if phase == "now":
+        # current transitional
+        if eu == "C0" or wb == "sub250":
+            out.update(A1="ok", A2="no", A3="ok")  # A3 always permissible if away from people
+        elif eu == "C1":
+            out.update(A1="ok", A2="warn", A3="ok")  # A2 needs A2 CofC
+        elif eu in ("C2","C3","C4"):
+            out.update(A1="no", A2="warn", A3="ok")
         else:
-            out["headline"].append("Insufficient data")
-            out["status"]="bad"
-    out["notes"]+=["EU class marks not recognised after 31 Dec 2027."]
+            # legacy/unmarked
+            if wb == "sub250":
+                out.update(A1="ok", A2="no", A3="ok")
+            else:
+                out.update(A1="no", A2="no", A3="ok")
+                out["notes"].append("Legacy: typically A3 only.")
+        return out
+
+    if phase == "2026":
+        if uk.startswith("UK"):
+            if uk == "UK0":
+                out.update(A1="ok", A2="no", A3="ok")
+            elif uk == "UK1":
+                out.update(A1="ok", A2="warn", A3="ok")
+            elif uk == "UK2":
+                out.update(A1="no", A2="warn", A3="ok")
+            elif uk in ("UK3","UK4","UK5","UK6"):
+                out.update(A1="no", A2="no", A3="ok", Specific="warn")
+            return out
+        # EU still recognised through 2027
+        if eu == "C0" or wb == "sub250":
+            out.update(A1="ok", A2="no", A3="ok")
+        elif eu == "C1":
+            out.update(A1="ok", A2="warn", A3="ok")
+        elif eu in ("C2","C3","C4"):
+            out.update(A1="no", A2="warn", A3="ok")
+        else:
+            # legacy extended
+            if wb == "sub250":
+                out.update(A1="ok", A2="no", A3="ok")
+            else:
+                out.update(A1="no", A2="no", A3="ok")
+                out["notes"].append("Legacy: transitional limits continue.")
+        return out
+
+    if phase == "2028":
+        if uk.startswith("UK"):
+            if uk == "UK0":
+                out.update(A1="ok", A2="no", A3="ok")
+            elif uk == "UK1":
+                out.update(A1="ok", A2="warn", A3="ok")
+            elif uk == "UK2":
+                out.update(A1="no", A2="warn", A3="ok")
+            elif uk in ("UK3","UK4","UK5","UK6"):
+                out.update(A1="no", A2="no", A3="ok", Specific="warn")
+            return out
+        # No UK class (legacy): EU not recognised
+        if wb == "sub250":
+            out.update(A1="ok", A2="no", A3="ok")
+            out["notes"].append("Legacy: check added 2028 Remote ID / geo-awareness for ≥100 g with camera.")
+        else:
+            out.update(A1="no", A2="no", A3="ok", Specific="warn")
+            out["notes"].append("EU class not recognised; legacy likely A3 or Specific.")
+        return out
+
     return out
 
-def render_rule_card(summary: dict):
-    title = summary["title"]
-    head  = " • ".join(summary["headline"]) if summary["headline"] else "—"
-    bullets = "".join(f"<li>{b}</li>" for b in summary["bullets"])
-    notes = " ".join(summary["notes"])
-    pill_cls = "pill-ok" if summary["status"]=="ok" else ("pill-warn" if summary["status"]=="warn" else "pill-bad")
-    head_html = f"<span class='pill {pill_cls}'>{head}</span>"
-    return (
-        f"<div class='rule-card'>"
-        f"<div class='rule-title'>{title}</div>"
-        f"<div class='rule-head'>{head_html}</div>"
-        f"<ul class='rule-ul'>{bullets}</ul>"
-        f"<div class='rule-foot'>{notes}</div>"
-        f"</div>"
-    )
+def toel_guidance_by_phase(row, phase):
+    """Return short TOAL (take-off/landing) separation guidance per phase."""
+    # These are concise advisories for Open category:
+    if phase == "now":
+        return "TOAL: keep ≤50 m from uninvolved people only if unavoidable & safe."
+    if phase == "2026":
+        return "TOAL: ≤50 m permitted when necessary & safe; follow class limits."
+    if phase == "2028":
+        return "TOAL: as per UK class; ≤50 m only if unavoidable & safe."
+    return ""
 
-def render_rule_panel(row):
-    now = summarize_now(row)
-    y26 = summarize_2026(row)
-    y28 = summarize_2028(row)
-    html = (
-        "<div class='rule-grid'>"
-        f"{render_rule_card(now)}"
-        f"{render_rule_card(y26)}"
-        f"{render_rule_card(y28)}"
-        "</div>"
-    )
-    st.markdown(html, unsafe_allow_html=True)
+def quals_by_phase(row, phase):
+    """Return qualification summary for A1/A2/A3/Specific."""
+    caps = capability_by_phase(row, phase)
+    parts = []
+    if caps["A2"] in ("ok","warn"):
+        parts.append("A2 CofC for A2")
+    if caps["Specific"] in ("ok","warn"):
+        parts.append("GVC + Operational Authorisation for Specific")
+    if not parts:
+        parts.append("Basic flyer competency (Flyer ID)")
+    return " • ".join(parts)
+
+# ---------- Matrix render ----------
+def render_rule_matrix(row):
+    phases = [
+        ("Now", "now"),
+        ("From 1 Jan 2026", "2026"),
+        ("From 1 Jan 2028 (planned)", "2028"),
+    ]
+    cols_html = []
+    ticks = allow_map()
+
+    for title, key in phases:
+        caps = capability_by_phase(row, key)
+        flyer, oper = flyer_operator_by_phase(row, key)
+        class_effective = class_in_effect_by_phase(row, key)
+        toel = toel_guidance_by_phase(row, key)
+        quals = quals_by_phase(row, key)
+
+        # Row builder helpers
+        def line_row(label, content_html):
+            return f"<div class='rule-row'><div class='rlabel'>{label}</div><div class='rval'>{content_html}</div></div>"
+
+        def state_pill(state, note=None):
+            cls = "p-ok" if state=="ok" else ("p-warn" if state=="warn" else "p-no")
+            lab = "Permitted" if state=="ok" else ("Conditional" if state=="warn" else "Not allowed")
+            extra = f" <span class='small'>({note})</span>" if note else ""
+            return f"<span class='pill {cls}'>{lab}</span>{extra}"
+
+        # A1/A2/A3/Specific rows
+        a1 = state_pill(caps["A1"], "Avoid crowds / be considerate" if caps["A1"]!="no" else None)
+        a2 = state_pill(caps["A2"], "A2 CofC; 5–30 m" if caps["A2"]!="no" else None)
+        a3 = state_pill(caps["A3"], "≥150 m built-up areas" if caps["A3"]!="no" else None)
+        sp = state_pill(caps["Specific"], "GVC + OA" if caps["Specific"]!="no" else None)
+
+        # Flyer/Operator
+        flyer_p = f"<span class='pill {'p-ok' if flyer=='Yes' else 'p-no'}'>Flyer ID: {flyer}</span>"
+        oper_p  = f"<span class='pill {'p-ok' if oper =='Yes' else 'p-no'}'>Operator ID: {oper}</span>"
+
+        # Class in effect
+        class_chip = f"<span class='rule-chip'>Class in effect: {class_effective}</span>"
+
+        # Build card
+        card = (
+            f"<div class='rule-card'>"
+            f"<div class='rule-title'>{title}</div>"
+            f"{class_chip}"
+            f"<div class='hr'></div>"
+            f"<div class='rule-table'>"
+            f"{line_row('A1', a1)}"
+            f"{line_row('A2', a2)}"
+            f"{line_row('A3', a3)}"
+            f"{line_row('Specific', sp)}"
+            f"{line_row('TOAL', f\"<span class='small'>{toel}</span>\")}"
+            f"{line_row('Qualifications', f\"<span class='small'>{quals}</span>\")}"
+            f"{line_row('IDs', flyer_p + ' ' + oper_p)}"
+            f"</div>"
+        )
+
+        # Notes (if any)
+        notes = caps.get("notes", [])
+        if notes:
+            notes_html = " ".join(f"<div class='small'>• {n}</div>" for n in notes)
+            card += f"<div class='hr'></div>{notes_html}"
+
+        card += "</div>"
+        cols_html.append(card)
+
+    st.markdown("<div class='rule-grid'>" + "".join(cols_html) + "</div>", unsafe_allow_html=True)
 
 # ---------- Screens ----------
 if not segment:
@@ -360,19 +415,21 @@ else:
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     ser_label = next(s["label"] for s in series_defs_for(segment) if s["key"] == series)
 
-    # If a model is selected, show sidebar details + MAIN rule panel
     if model:
         sel = df[df["model_key"] == model]
         if not sel.empty:
             row = sel.iloc[0]
-            back_qs = f"segment={segment}&series={series}"
-            st.sidebar.markdown(f"<a class='sidebar-back' href='?{back_qs}' target='_self'>← Back to models</a>", unsafe_allow_html=True)
 
+            # Sidebar (unchanged except breadcrumb removed)
+            back_qs = f"segment={segment}&series={series}"
+            st.sidebar.markdown(
+                f"<a class='sidebar-back' href='?{back_qs}' target='_self'>← Back to models</a>",
+                unsafe_allow_html=True
+            )
             img_url = resolve_img(row.get("image_url",""))
             if img_url:
                 st.sidebar.image(img_url, use_container_width=True, caption=row.get("marketing_name",""))
 
-            # EU/UK flag lines
             eu = (row.get("eu_class_marking") or row.get("class_marking") or "unknown") or "unknown"
             uk = (row.get("uk_class_marking") or row.get("class_marking") or "unknown") or "unknown"
             st.sidebar.markdown(
@@ -384,7 +441,6 @@ else:
                 unsafe_allow_html=True
             )
 
-            # Operator ID badge + Flyer ID (placeholder)
             op = str(row.get("operator_id_required","")).strip().lower()
             if op in ("yes","true","1"):
                 st.sidebar.markdown("<span class='badge badge-red'>Operator ID: Required</span>", unsafe_allow_html=True)
@@ -392,9 +448,9 @@ else:
                 st.sidebar.markdown("<span class='badge badge-green'>Operator ID: Not required</span>", unsafe_allow_html=True)
             else:
                 st.sidebar.markdown("<span class='badge badge-gray'>Operator ID: Unknown</span>", unsafe_allow_html=True)
+
             st.sidebar.markdown("<div style='margin-top:6px'><span class='badge badge-gray'>Flyer ID</span></div>", unsafe_allow_html=True)
 
-            # Key specs
             st.sidebar.markdown("<div class='sidebar-title'>Key specs</div>", unsafe_allow_html=True)
             mtow = str(row.get("mtom_g_nominal","")).strip()
             mtow_display = (mtow+" g") if mtow else "—"
@@ -411,13 +467,12 @@ else:
                 unsafe_allow_html=True
             )
 
-            # ---- NEW: main body rule panel (three columns) ----
-            render_rule_panel(row)
+            # ---- Main body: compliance matrix ----
+            render_rule_matrix(row)
 
         else:
             model = None
 
-    # Model grid if no model selected
     if not model:
         models = models_for(segment, series)
         items=[]
