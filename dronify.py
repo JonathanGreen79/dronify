@@ -12,7 +12,7 @@ from pathlib import Path
 st.set_page_config(page_title="Dronify", layout="wide")
 
 # ---------- Paths ----------
-DATASET_PATH = Path("dji_drones.yaml")
+DATASET_PATH = Path("dji_drones_v3.yaml")
 TAXONOMY_PATH = Path("taxonomy.yaml")
 
 # ---------- Load ----------
@@ -251,3 +251,4 @@ else:
                           img_url=resolve_img(str(r.get("image_url",""))))
             )
         render_two_rows(f"Choose a drone ({seg_label} → {ser_label})", items)
+
