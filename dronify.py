@@ -59,17 +59,18 @@ def resolve_img(url: str) -> str:
 st.markdown(
     """
 <style>
-.block-container { padding-top: .8rem; }
+.block-container { padding-top: .7rem; }
 
 /* Titles */
 .h1 { font-weight: 800; font-size: 1.2rem; color: #1F2937; margin: 6px 0 12px 0; }
 .hdr { font-weight: 800; font-size: 1.35rem; margin: 6px 0 12px; }
 
-/* Sidebar tweaks */
-section[data-testid="stSidebar"] .block-container { padding-top: .5rem; }
-.sidebar-title { font-weight:800; font-size:1.05rem; margin:.4rem 0 .2rem; }
-.sidebar-kv { margin:.22rem 0; color:#374151; font-size:.92rem; }
-section[data-testid="stSidebar"] div[data-testid="stCheckbox"] { margin: 3px 0 !important; }
+/* Sidebar tweaks (more compact) */
+section[data-testid="stSidebar"] .block-container { padding-top: .4rem; }
+.sidebar-title { font-weight:800; font-size:1.02rem; margin:.35rem 0 .2rem; }
+.sidebar-kv { margin:.18rem 0; color:#374151; font-size:.90rem; }
+section[data-testid="stSidebar"] div[data-testid="stCheckbox"] { margin: 2px 0 !important; }
+section[data-testid="stSidebar"] label p { font-size: .9rem; margin: 0; }
 
 /* Badges & pills */
 .badge      { display:inline-block; padding:4px 10px; border-radius:999px; font-weight:700; font-size:.8rem; }
@@ -84,7 +85,8 @@ section[data-testid="stSidebar"] div[data-testid="stCheckbox"] { margin: 3px 0 !
 .pill-info { background:#F3F4F6; color:#475569; }
 
 /* Cards / bricks */
-.card-outer { border:1px solid #E5E7EB; border-radius:12px; padding:14px; margin-bottom:12px; }
+.card-outer { border:1px solid #E5E7EB; border-radius:12px; padding:14px; margin-bottom:12px; width:100%;
+              display:flex; flex-direction:column; }
 .card-allowed-bg  { background: #F6FEF8; }
 .card-possible-bg { background: #F5F8FE; }
 .card-na-bg       { background: #FAFAFB; }
@@ -99,8 +101,18 @@ section[data-testid="stSidebar"] div[data-testid="stCheckbox"] { margin: 3px 0 !
 .small { font-size:.85em; color:#374151; }
 
 /* Legend */
-.legend { margin-top: 10px; border-top:1px solid #E5E7EB; padding-top:8px; }
+.legend { margin-top: 8px; border-top:1px solid #E5E7EB; padding-top:6px; }
 .legend .badge { margin-right:6px; }
+
+/* Three-cell GRID per row so all bricks align (same row height) */
+.grid3 { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; align-items: stretch; }
+.grid3 > div { display:flex; }
+.grid3 .card-outer { flex:1 1 auto; }
+
+/* Column headers row */
+.grid3-headers { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; margin-bottom: 6px; }
+.grid3-headers .hdrcell { font-weight:800; font-size:1.15rem; color:#111827; }
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -253,7 +265,6 @@ def compute_bricks(row: pd.Series, creds: dict, year: int):
     geo_ok = yesish(row.get("geo_awareness", "unknown"))
     rid_ok = yesish(row.get("remote_id_builtin", "unknown"))
     eu = str(row.get("eu_class_marking", "")).strip().lower()
-    mtom = float(row.get("mtom_g_nominal") or 0.0)
 
     # Credentials
     have_op = creds.get("op", False)
@@ -271,7 +282,7 @@ def compute_bricks(row: pd.Series, creds: dict, year: int):
     else:
         pills_a1.append(pill_ok("Operator ID: OK"))
 
-    # Flyer ID: needed for camera drones (treat as required in all bands here)
+    # Flyer ID: needed for camera drones (treated as required for clarity)
     if has_cam and not have_fl:
         pills_a1.append(pill_need("Flyer ID: Required", "Basic test for camera drones."))
     else:
@@ -281,25 +292,19 @@ def compute_bricks(row: pd.Series, creds: dict, year: int):
     pills_a1.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
     pills_a1.append(pill_info("A1/A3: Optional"))
 
-    a1_all_ok = all(("Operator ID: OK" in x or "Operator ID" not in x) for x in pills_a1) and \
-                all(("Flyer ID: OK" in x or "Flyer ID" not in x) for x in pills_a1)
+    a1_all_ok = all(("Required" not in x) for x in pills_a1)
     a1_kind = "allowed" if a1_all_ok else "possible"
     a1_badge = badge("Allowed" if a1_kind == "allowed" else "Possible (additional requirements)", a1_kind)
     a1_body = f"<div class='small'>{rule_text_a1()}</div><div>{''.join(pills_a1)}</div>"
     html_a1 = card("A1 — Close to people", a1_badge, a1_body, a1_kind)
 
     # ---------- A2 ----------
-    pills_a2 = []
-    # If truly a C2 platform (heuristic: eu==c2) else N/A
     is_c2 = (eu == "c2")
-
+    pills_a2 = []
     if is_c2:
-        # Credentials
         pills_a2.append(pill_need("Operator ID: Required") if not have_op else pill_ok("Operator ID: OK"))
         pills_a2.append(pill_need("Flyer ID: Required") if not have_fl else pill_ok("Flyer ID: OK"))
         pills_a2.append(pill_need("A2 CofC: Required") if not have_a2 else pill_ok("A2 CofC: OK"))
-
-        # Platform features
         pills_a2.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
         pills_a2.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
 
@@ -308,9 +313,7 @@ def compute_bricks(row: pd.Series, creds: dict, year: int):
         a2_badge = badge("Allowed" if a2_kind == "allowed" else "Possible (additional requirements)", a2_kind)
         a2_body = f"<div class='small'>{rule_text_a2(year)}</div><div>{''.join(pills_a2)}</div>"
         html_a2 = card("A2 — Close with A2 CofC", a2_badge, a2_body, a2_kind)
-
     else:
-        # Not applicable for non-C2
         pills_a2.append(pill_info("A2 CofC: N/A"))
         pills_a2.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
         pills_a2.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
@@ -407,7 +410,7 @@ else:
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     ser_label = next(s["label"] for s in series_defs_for(segment) if s["key"] == series)
 
-    # Sidebar: back and basic info + flags
+    # Sidebar back
     st.sidebar.markdown(f"[← Back to models](?segment={segment}&series={series})")
 
     if model:
@@ -447,15 +450,14 @@ else:
             unsafe_allow_html=True,
         )
 
+        # Credentials (compact)
         st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
-        # Credentials checkboxes
         have_op = st.sidebar.checkbox("Operator ID", value=False, key="c_op")
         have_fl = st.sidebar.checkbox("Flyer ID (basic test)", value=False, key="c_fl")
         have_a1a3 = st.sidebar.checkbox("A1/A3 training (optional)", value=False, key="c_a1a3")
         have_a2 = st.sidebar.checkbox("A2 CofC", value=False, key="c_a2")
         have_gvc = st.sidebar.checkbox("GVC", value=False, key="c_gvc")
         have_oa = st.sidebar.checkbox("OA (Operational Authorisation)", value=False, key="c_oa")
-
         creds = dict(op=have_op, flyer=have_fl, a1a3=have_a1a3, a2=have_a2, gvc=have_gvc, oa=have_oa)
 
         # Legend in sidebar
@@ -472,23 +474,60 @@ else:
             unsafe_allow_html=True,
         )
 
-        # 3 columns: NOW (left), 2026 (mid), 2028 (right)
-        c_now, c_26, c_28 = st.columns(3)
+        # --------- Compute all bricks up-front ---------
+        a_now = compute_bricks(row, creds, 2025)
+        a_26  = compute_bricks(row, creds, 2026)
+        a_28  = compute_bricks(row, creds, 2028)
 
-        with c_now:
-            st.markdown("<div class='hdr'>NOW</div>", unsafe_allow_html=True)
-            a1, a2b, a3, sp = compute_bricks(row, creds, 2025)
-            show_html(a1); show_html(a2b); show_html(a3); show_html(sp)
+        # Headers row (NOW | 2026 | 2028)
+        st.markdown(
+            "<div class='grid3-headers'>"
+            "<div class='hdrcell'>NOW</div>"
+            "<div class='hdrcell'>2026</div>"
+            "<div class='hdrcell'>2028 (planned)</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
-        with c_26:
-            st.markdown("<div class='hdr'>2026</div>", unsafe_allow_html=True)
-            a1, a2b, a3, sp = compute_bricks(row, creds, 2026)
-            show_html(a1); show_html(a2b); show_html(a3); show_html(sp)
+        # Row 1: A1 across 3 cells
+        st.markdown(
+            "<div class='grid3'>"
+            f"<div>{a_now[0]}</div>"
+            f"<div>{a_26[0]}</div>"
+            f"<div>{a_28[0]}</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
-        with c_28:
-            st.markdown("<div class='hdr'>2028 (planned)</div>", unsafe_allow_html=True)
-            a1, a2b, a3, sp = compute_bricks(row, creds, 2028)
-            show_html(a1); show_html(a2b); show_html(a3); show_html(sp)
+        # Row 2: A2 across 3 cells
+        st.markdown(
+            "<div class='grid3'>"
+            f"<div>{a_now[1]}</div>"
+            f"<div>{a_26[1]}</div>"
+            f"<div>{a_28[1]}</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Row 3: A3 across 3 cells
+        st.markdown(
+            "<div class='grid3'>"
+            f"<div>{a_now[2]}</div>"
+            f"<div>{a_26[2]}</div>"
+            f"<div>{a_28[2]}</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        # Row 4: Specific across 3 cells
+        st.markdown(
+            "<div class='grid3'>"
+            f"<div>{a_now[3]}</div>"
+            f"<div>{a_26[3]}</div>"
+            f"<div>{a_28[3]}</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
     else:
         # No model selected -> grid of cards (two-row horizontal grid visual)
