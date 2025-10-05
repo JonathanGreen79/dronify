@@ -149,7 +149,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/mini-5-pro.jpg
+    image_url: images/mini_5_pro.jpg
     notes: C0 flagship; omnidirectional sensing.
 
   - model_key: air-2s
