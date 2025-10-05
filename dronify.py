@@ -378,10 +378,10 @@ def render_rule_matrix(row):
             f"{line_row('A2', a2)}"
             f"{line_row('A3', a3)}"
             f"{line_row('Specific', sp)}"
-            f"{line_row('TOAL', f\"<span class='small'>{toel}</span>\")}"
-            f"{line_row('Qualifications', f\"<span class='small'>{quals}</span>\")}"
-            f"{line_row('IDs', flyer_p + ' ' + oper_p)}"
-            f"</div>"
+            + line_row("TOAL", f"<span class='small'>{toel}</span>")
+            + line_row("Qualifications", f"<span class='small'>{quals}</span>")
+            + line_row("IDs", flyer_p + " " + oper_p)
+            + "</div>"
         )
 
         # Notes (if any)
@@ -495,3 +495,4 @@ else:
                 )
             )
         render_two_rows(f"Choose a drone ({seg_label} → {ser_label})", items)
+
