@@ -34,6 +34,7 @@ def load_data():
         if col not in df.columns:
             df[col] = ""
 
+    # Normalized
     df["segment_norm"] = df["segment"].astype(str).str.strip().str.lower()
     df["series_norm"]  = df["series"].astype(str).str.strip().str.lower()
     return df, taxonomy
@@ -47,10 +48,11 @@ def resolve_img(url: str) -> str:
         return url
     if low.startswith("images/"):
         return RAW_BASE + url.split("/", 1)[1]
+    # bare filename -> assume images/
     return RAW_BASE + url.lstrip("/")
 
 # ---------------------------------------------------------------------
-# UI CSS
+# UI CSS  (updated: grid2 and headers, removed grid3)
 # ---------------------------------------------------------------------
 st.markdown(
     """
@@ -100,15 +102,15 @@ section[data-testid="stSidebar"] label p { font-size: .9rem; margin: 0; }
 .legend { margin-top: 8px; border-top:1px solid #E5E7EB; padding-top:6px; }
 .legend .badge { margin-right:6px; }
 
-/* Three-cell GRID per row so all bricks align (same row height) */
-.grid3 { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; align-items: stretch; }
-.grid3 > div { display:flex; }
+/* TWO-column GRID per row so all bricks align (updated) */
+.grid2 { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; align-items: stretch; }
+.grid2 > div { display:flex; }
 
 /* Header cells */
 .hdrcell { font-weight:800; font-size:1.15rem; color:#111827; }
 
 /* Vertical dividers between columns */
-.divided.grid3 > div:not(:first-child) {
+.divided.grid2 > div:not(:first-child) {
   border-left: 1px solid #EDEFF3;
   padding-left: 12px;
 }
@@ -249,7 +251,7 @@ def rule_text_specific():
     )
 
 # ---------------------------------------------------------------------
-# Eligibility gating (fixes your A1 bug)
+# Eligibility gating (A1/A2/A3) — includes C1→A1 bridge + sub-100 g exemption
 # ---------------------------------------------------------------------
 def _lc(x):
     return str(x or "").strip().lower()
@@ -269,7 +271,8 @@ def _parse_mtow_g(row) -> float | None:
 def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -> dict:
     """
     Hard gates for A1/A2/A3 so heavy aircraft never show A1.
-    UK bridging: treat EU C-classes as equivalent UK classes until end of 2027.
+    UK bridging: treat EU C-classes as equivalent UK classes until end of 2027,
+    incl. C1 allowed in A1 during 2026–2027. Sub-100 g: no IDs; A1/A3 eligible.
     """
     eu = _lc(row.get("eu_class_marking", ""))
     uk = _lc(row.get("uk_class_marking", ""))
@@ -277,16 +280,23 @@ def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -
 
     bridge = (jurisdiction.upper() == "UK" and year <= 2027)
 
-    # A1 — Over people: only truly light/classed aircraft
+    # sub-100 g exemption: eligible for A1 & A3; IDs not required
+    if mtow is not None and mtow < 100:
+        return {"a1": True, "a2": False, "a3": True}
+
+    # --- A1 (Over people)
     a1 = False
     if mtow is not None and mtow <= 250:
         a1 = True
     if uk in {"uk0", "uk1"}:
         a1 = True
-    if bridge and eu in {"c0", "c1"}:
+    # C1 -> A1 bridge only in 2026–2027
+    if bridge and year >= 2026 and eu == "c1":
+        a1 = True
+    if bridge and eu in {"c0"}:
         a1 = True
 
-    # A2 — Near people: UK2 or (bridge) C2; plus legacy UK fallback (<2kg pre-2026)
+    # --- A2 (Near people)
     a2 = False
     if uk == "uk2" or (bridge and eu == "c2"):
         if mtow is None or mtow <= 4000:
@@ -295,7 +305,7 @@ def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -
         mtow is not None and mtow <= 2000):
         a2 = True
 
-    # A3 — Far from people: broadly <25 kg in Open, or appropriate class
+    # --- A3 (Far from people)
     a3 = False
     if mtow is not None and mtow < 25000:
         a3 = True
@@ -320,7 +330,6 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
     # Credentials
     have_op   = creds.get("op", False)
     have_fl   = creds.get("flyer", False)
-    have_a1a3 = creds.get("a1a3", False)  # informational only
     have_a2   = creds.get("a2", False)
     have_gvc  = creds.get("gvc", False)
     have_oa   = creds.get("oa", False)
@@ -336,11 +345,19 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
         )
     else:
         pills_a1 = []
-        pills_a1.append(pill_need("Operator ID: Required") if (has_cam and not have_op) else pill_ok("Operator ID: OK"))
-        pills_a1.append(pill_need("Flyer ID: Required") if (has_cam and not have_fl) else pill_ok("Flyer ID: OK"))
+        # Sub-100 g drones don't require IDs; otherwise, require IDs for camera drones
+        if has_cam and not (have_op or (_parse_mtow_g(row) and _parse_mtow_g(row) < 100)):
+            pills_a1.append(pill_need("Operator ID: Required"))
+        else:
+            pills_a1.append(pill_ok("Operator ID: OK"))
+
+        if has_cam and not (have_fl or (_parse_mtow_g(row) and _parse_mtow_g(row) < 100)):
+            pills_a1.append(pill_need("Flyer ID: Required"))
+        else:
+            pills_a1.append(pill_ok("Flyer ID: OK"))
+
         pills_a1.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
         pills_a1.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
-        pills_a1.append(pill_info("A1/A3: Optional"))
         a1_all_ok = all(("Required" not in x) for x in pills_a1)
         a1_kind   = "allowed" if a1_all_ok else "possible"
         a1_badge  = badge("Allowed" if a1_kind == "allowed" else "Possible (additional requirements)", a1_kind)
@@ -363,6 +380,7 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
         pills_a2.append(pill_need("A2 CofC: Required") if not have_a2 else pill_ok("A2 CofC: OK"))
         pills_a2.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
         pills_a2.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
+
         a2_all_ok = all(("Required" not in x) for x in pills_a2)
         a2_kind   = "allowed" if a2_all_ok else "possible"
         a2_badge  = badge("Allowed" if a2_kind == "allowed" else "Possible (additional requirements)", a2_kind)
@@ -384,6 +402,7 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
         pills_a3.append(pill_need("Flyer ID: Required") if not have_fl else pill_ok("Flyer ID: OK"))
         pills_a3.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
         pills_a3.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
+
         a3_all_ok = all(("Required" not in x) for x in pills_a3)
         a3_kind   = "allowed" if a3_all_ok else "possible"
         a3_badge  = badge("Allowed" if a3_kind == "allowed" else "Possible (additional requirements)", a3_kind)
@@ -506,7 +525,7 @@ else:
             unsafe_allow_html=True,
         )
 
-        # Credentials (compact)
+        # Credentials (compact) — removed A1/A3 training; renamed Flyer ID
         st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
         have_op   = st.sidebar.checkbox("Operator ID", value=False, key="c_op")
         have_fl   = st.sidebar.checkbox("Flyer ID", value=False, key="c_fl")
@@ -518,53 +537,47 @@ else:
         # --------- Compute all bricks (UK by default) ---------
         a_now = compute_bricks(row, creds, 2025, jurisdiction="UK")
         a_26  = compute_bricks(row, creds, 2026, jurisdiction="UK")
-        a_28  = compute_bricks(row, creds, 2028, jurisdiction="UK")
 
-        # ---------- HEADERS (NOW | 2026 | 2028) ----------
+        # ---------- HEADERS (Now | 2026–2027 bridge) ----------
         st.markdown(
             """
-<div class='grid3 divided' style='margin:4px 0 10px'>
-  <div><div class='hdrcell'>NOW</div></div>
-  <div><div class='hdrcell'>2026</div></div>
-  <div><div class='hdrcell'>2028 (planned)</div></div>
+<div class='grid2 divided' style='margin:4px 0 10px'>
+  <div><div class='hdrcell'>Now – 31 Dec 2025</div></div>
+  <div><div class='hdrcell'>1 Jan 2026 – 31 Dec 2027 (UK–EU bridge)</div></div>
 </div>
 """,
             unsafe_allow_html=True,
         )
 
-        # Row 1: A1 across 3 cells
+        # Row 1: A1 across 2 cells
         st.markdown(
-            "<div class='grid3 divided'>"
+            "<div class='grid2 divided'>"
             f"<div>{a_now[0]}</div>"
             f"<div>{a_26[0]}</div>"
-            f"<div>{a_28[0]}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
-        # Row 2: A2 across 3 cells
+        # Row 2: A2 across 2 cells
         st.markdown(
-            "<div class='grid3 divided'>"
+            "<div class='grid2 divided'>"
             f"<div>{a_now[1]}</div>"
             f"<div>{a_26[1]}</div>"
-            f"<div>{a_28[1]}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
-        # Row 3: A3 across 3 cells
+        # Row 3: A3 across 2 cells
         st.markdown(
-            "<div class='grid3 divided'>"
+            "<div class='grid2 divided'>"
             f"<div>{a_now[2]}</div>"
             f"<div>{a_26[2]}</div>"
-            f"<div>{a_28[2]}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
-        # Row 4: Specific across 3 cells
+        # Row 4: Specific across 2 cells
         st.markdown(
-            "<div class='grid3 divided'>"
+            "<div class='grid2 divided'>"
             f"<div>{a_now[3]}</div>"
             f"<div>{a_26[3]}</div>"
-            f"<div>{a_28[3]}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
@@ -596,4 +609,3 @@ else:
             f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
             unsafe_allow_html=True,
         )
-
