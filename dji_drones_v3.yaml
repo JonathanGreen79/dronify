@@ -4,470 +4,422 @@ schema:
     marketing_name: Product name
     segment: consumer | pro | enterprise
     series: mini | air | mavic | mavic-enterprise | avata | fpv | inspire | m-series | matrice | neo | flip
-    image_url: Relative filename in /images or full URL
-    spec_url: Official DJI spec link (UK)
-    operator_id_required: yes | no
-    sensor: Camera sensor description
-    effective_mp: Effective megapixels
-    aperture: Aperture value
-    focal_length_eq: 35 mm equivalent focal length
-    video_resolutions: Highest standard video modes
-    hdr: HDR / Log capability
-    log_profile: Log profile if any
-    photo_formats: Supported photo formats
-    video_formats: Supported video formats
-    gimbal_stabilization: 3-axis / mechanical type
-    dim_folded: Folded dimensions (mm)
-    dim_unfolded: Unfolded dimensions (mm)
-    diagonal_length: Diagonal length (mm)
-    transmission_system: Link type (OcuSync/O series)
-    max_range_km: Max range (CE)
-    controller_compat: Supported controllers
-    max_flight_time_min: Max flight time (standard battery)
-    max_speed_ms: Max horizontal speed
-    wind_resistance: Max wind resistance
-    max_ascent_ms: Max ascent rate
-    max_descent_ms: Max descent rate
-    max_service_ceiling_m: Max altitude
-    battery_capacity_mah: Battery capacity
-    battery_type: Battery chemistry
-    battery_weight_g: Battery weight
-    charging_power_w: Max charge power
-    eu_class_marking: CE class marking
-    uk_class_marking: UK class marking
+    mtom_g_nominal: Nominal MTOM in grams
+    eu_class_marking: EU class (C0–C6) or legacy/unknown
+    uk_class_marking: UK class (UK0–UK6) if known, else ""
     year_released: Year introduced
-    notes: Key remarks
+    has_camera: "yes" | "no"
+    geo_awareness: "yes" | "no" | "unknown"
+    remote_id_builtin: "yes" | "no" | "unknown"
+    operator_id_required: "yes" | "no" | "unknown"
+    image_url: Path under /images or external URL
+    notes: Optional short note
 
 data:
+  # ========== CONSUMER ==========
+  - model_key: dji-flip
+    marketing_name: DJI Flip
+    segment: consumer
+    series: flip
+    mtom_g_nominal: 249
+    eu_class_marking: C0
+    uk_class_marking: ""
+    year_released: 2025
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "unknown"
+    operator_id_required: "yes"
+    image_url: images/dji-flip.jpg
+    notes: Sub-250 g C0; foldable guards.
 
-# ========== CONSUMER ==========
-- model_key: dji-flip
-  marketing_name: DJI Flip
-  segment: consumer
-  series: flip
-  image_url: dji_flip.jpg
-  spec_url: "https://www.dji.com/uk/support/product/flip"
-  operator_id_required: "yes"
-  sensor: "1/2.3-inch CMOS"
-  effective_mp: "12 MP"
-  aperture: "f/2.8"
-  video_resolutions: "2.7K @ 30 fps"
-  transmission_system: "Wi-Fi Enhanced"
-  max_range_km: "2 km (CE)"
-  max_flight_time_min: "20 min"
-  eu_class_marking: "C0"
-  uk_class_marking: "C0"
-  year_released: 2025
-  notes: "Foldable sub-250 g entry-level C0 drone."
+  - model_key: dji-neo
+    marketing_name: DJI Neo
+    segment: consumer
+    series: neo
+    mtom_g_nominal: 135
+    eu_class_marking: C0
+    uk_class_marking: ""
+    year_released: 2025
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "unknown"
+    operator_id_required: "yes"
+    image_url: images/dji-neo.jpg
+    notes: Sub-250 g selfie drone.
 
-- model_key: dji-neo
-  marketing_name: DJI Neo
-  segment: consumer
-  series: neo
-  image_url: dji_neo.jpg
-  spec_url: "https://www.dji.com/uk/support/product/neo"
-  operator_id_required: "yes"
-  sensor: "1/2.3-inch CMOS"
-  effective_mp: "12 MP"
-  aperture: "f/2.8"
-  video_resolutions: "1080p @ 60 fps"
-  transmission_system: "Wi-Fi Enhanced"
-  max_range_km: "2 km (CE)"
-  max_flight_time_min: "20 min"
-  eu_class_marking: "C0"
-  uk_class_marking: "C0"
-  year_released: 2025
-  notes: "Toy-class selfie drone with prop-guards."
+  - model_key: mini
+    marketing_name: DJI Mavic Mini
+    segment: consumer
+    series: mini
+    mtom_g_nominal: 249
+    eu_class_marking: legacy
+    uk_class_marking: ""
+    year_released: 2019
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "unknown"
+    operator_id_required: "yes"
+    image_url: images/mini.jpg
+    notes: Legacy sub-250g.
 
-- model_key: mini
-  marketing_name: DJI Mavic Mini
-  segment: consumer
-  series: mini
-  image_url: mini_mavic.jpg
-  spec_url: "https://www.dji.com/uk/support/product/mavic-mini"
-  operator_id_required: "yes"
-  sensor: "1/2.3-inch CMOS 12 MP"
-  aperture: "f/2.8"
-  video_resolutions: "2.7K @ 30 fps"
-  transmission_system: "Enhanced Wi-Fi"
-  max_range_km: "4 km (CE)"
-  max_flight_time_min: "30 min"
-  eu_class_marking: "Legacy"
-  uk_class_marking: "Legacy"
-  year_released: 2019
-  notes: "First sub-250 g Mini; legacy A1 until 2026."
+  - model_key: mini-2
+    marketing_name: DJI Mini 2
+    segment: consumer
+    series: mini
+    mtom_g_nominal: 249
+    eu_class_marking: legacy
+    uk_class_marking: ""
+    year_released: 2020
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "unknown"
+    operator_id_required: "yes"
+    image_url: images/mini-2.jpg
+    notes: Legacy; OcuSync 2.0.
 
-- model_key: mini-2
-  marketing_name: DJI Mini 2
-  segment: consumer
-  series: mini
-  image_url: mini_2.jpg
-  spec_url: "https://www.dji.com/uk/support/product/mini-2"
-  operator_id_required: "yes"
-  sensor: "1/2.3-inch CMOS 12 MP"
-  aperture: "f/2.8"
-  video_resolutions: "4K @ 30 fps"
-  transmission_system: "OcuSync 2.0"
-  max_range_km: "10 km (CE)"
-  max_flight_time_min: "31 min"
-  eu_class_marking: "Legacy"
-  uk_class_marking: "Legacy"
-  year_released: 2020
-  notes: "Legacy A1 Transitional until Jan 2026 (UK)."
+  - model_key: mini-2-se
+    marketing_name: DJI Mini 2 SE
+    segment: consumer
+    series: mini
+    mtom_g_nominal: 246
+    eu_class_marking: legacy
+    uk_class_marking: ""
+    year_released: 2023
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "unknown"
+    operator_id_required: "yes"
+    image_url: images/mini-2-se.jpg
+    notes: Budget Mini variant.
 
-- model_key: mini-2-se
-  marketing_name: DJI Mini 2 SE
-  segment: consumer
-  series: mini
-  image_url: mini_2_se.jpg
-  spec_url: "https://www.dji.com/uk/support/product/mini-2-se"
-  operator_id_required: "yes"
-  sensor: "1/2.3-inch CMOS 12 MP"
-  aperture: "f/2.8"
-  video_resolutions: "2.7K @ 30 fps"
-  transmission_system: "OcuSync 2.0"
-  max_range_km: "8 km (CE)"
-  max_flight_time_min: "31 min"
-  eu_class_marking: "Legacy"
-  uk_class_marking: "Legacy"
-  year_released: 2023
-  notes: "Budget Mini variant without 4K; legacy A3 after 2026."
+  - model_key: mini-3
+    marketing_name: DJI Mini 3
+    segment: consumer
+    series: mini
+    mtom_g_nominal: 248
+    eu_class_marking: C0
+    uk_class_marking: ""
+    year_released: 2022
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "unknown"
+    operator_id_required: "yes"
+    image_url: images/mini-3.jpg
+    notes: C0-labelled variant availability can vary.
 
-- model_key: mini-3
-  marketing_name: DJI Mini 3
-  segment: consumer
-  series: mini
-  image_url: mini_3.jpg
-  spec_url: "https://www.dji.com/uk/support/product/mini-3-pro"
-  operator_id_required: "yes"
-  sensor: "1/1.3-inch CMOS 12 MP"
-  aperture: "f/1.7"
-  video_resolutions: "4K @ 30 fps"
-  transmission_system: "OcuSync 2.0"
-  max_range_km: "10 km (CE)"
-  max_flight_time_min: "38 min"
-  eu_class_marking: "C0"
-  uk_class_marking: "C0"
-  year_released: 2022
-  notes: "C0-class budget Mini with longer battery option."
+  - model_key: mini-3-pro
+    marketing_name: DJI Mini 3 Pro
+    segment: consumer
+    series: mini
+    mtom_g_nominal: 249
+    eu_class_marking: C0
+    uk_class_marking: ""
+    year_released: 2022
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "unknown"
+    operator_id_required: "yes"
+    image_url: images/mini-3-pro.jpg
+    notes: Some units updated to C1 in EU; keep EU= C0/C1 if you prefer.
 
-- model_key: mini-3-pro
-  marketing_name: DJI Mini 3 Pro
-  segment: consumer
-  series: mini
-  image_url: mini_3_pro.png
-  spec_url: "https://www.dji.com/uk/support/product/mini-3-pro"
-  operator_id_required: "yes"
-  sensor: "1/1.3-inch CMOS 48 MP"
-  aperture: "f/1.7"
-  video_resolutions: "4K @ 60 fps"
-  transmission_system: "DJI O3"
-  max_range_km: "12 km (CE)"
-  max_flight_time_min: "34 min"
-  eu_class_marking: "C0 / C1 via update"
-  uk_class_marking: "C0 / C1"
-  year_released: 2022
-  notes: "Tri-directional sensing Mini with D-Cinelike."
+  - model_key: mini-4-pro
+    marketing_name: DJI Mini 4 Pro
+    segment: consumer
+    series: mini
+    mtom_g_nominal: 249
+    eu_class_marking: C0
+    uk_class_marking: ""
+    year_released: 2023
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/mini-4-pro.jpg
+    notes: Omnidirectional sensing; often C0/C1 in EU.
 
-- model_key: mini-4-pro
-  marketing_name: DJI Mini 4 Pro
-  segment: consumer
-  series: mini
-  image_url: mini_4_pro.jpg
-  spec_url: "https://www.dji.com/uk/mini-4-pro/specs"
-  operator_id_required: "yes"
-  sensor: "1/1.3-inch CMOS 48 MP"
-  aperture: "f/1.7"
-  video_resolutions: "4K @ 100 fps"
-  transmission_system: "DJI O4"
-  max_range_km: "20 km (CE)"
-  max_flight_time_min: "34 min"
-  eu_class_marking: "C0 / C1"
-  uk_class_marking: "C0 / C1"
-  year_released: 2023
-  notes: "Omnidirectional sensing C0/C1 Mini with O4 link."
+  - model_key: mini-5-pro
+    marketing_name: DJI Mini 5 Pro
+    segment: consumer
+    series: mini
+    mtom_g_nominal: 249
+    eu_class_marking: C0
+    uk_class_marking: ""
+    year_released: 2025
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/mini-5-pro.jpg
+    notes: C0 flagship; omnidirectional sensing.
 
-- model_key: mini-5-pro
-  marketing_name: DJI Mini 5 Pro
-  segment: consumer
-  series: mini
-  image_url: mini_5_pro.jpg
-  spec_url: "https://www.dji.com/uk/mini-5-pro/specs"
-  operator_id_required: "yes"
-  sensor: "1-inch CMOS 50 MP"
-  aperture: "f/1.8"
-  video_resolutions: "4K @ 100 fps"
-  transmission_system: "DJI O4"
-  max_range_km: "20 km (CE)"
-  max_flight_time_min: "34 min"
-  eu_class_marking: "C0"
-  uk_class_marking: "C0"
-  year_released: 2025
-  notes: "C0 flagship Mini with 1-inch sensor and omnidirectional sensing."
+  - model_key: air-2s
+    marketing_name: DJI Air 2S
+    segment: consumer
+    series: air
+    mtom_g_nominal: 595
+    eu_class_marking: legacy
+    uk_class_marking: ""
+    year_released: 2021
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "unknown"
+    operator_id_required: "yes"
+    image_url: images/air-2s.jpg
+    notes: Legacy 1-inch sensor.
 
-- model_key: air-2s
-  marketing_name: DJI Air 2S
-  segment: consumer
-  series: air
-  image_url: air_2s.jpg
-  spec_url: "https://www.dji.com/uk/support/product/air-2s"
-  operator_id_required: "yes"
-  sensor: "1-inch CMOS 20 MP"
-  aperture: "f/2.8"
-  video_resolutions: "5.4K @ 30 fps"
-  transmission_system: "OcuSync 3.0"
-  max_range_km: "12 km (CE)"
-  max_flight_time_min: "31 min"
-  eu_class_marking: "Legacy"
-  uk_class_marking: "Legacy"
-  year_released: 2021
-  notes: "Legacy C-transitional A2/A3 until 2026."
+  - model_key: air-3
+    marketing_name: DJI Air 3
+    segment: consumer
+    series: air
+    mtom_g_nominal: 720
+    eu_class_marking: C1
+    uk_class_marking: ""
+    year_released: 2023
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/air-3.jpg
+    notes: Dual-camera C1.
 
-- model_key: air-3
-  marketing_name: DJI Air 3
-  segment: consumer
-  series: air
-  image_url: air_3.png
-  spec_url: "https://www.dji.com/uk/support/product/air-3"
-  operator_id_required: "yes"
-  sensor: "Dual 1/1.3-inch CMOS 48 MP"
-  aperture: "f/1.7 (wide) / f/2.8 (tele)"
-  video_resolutions: "4K @ 100 fps"
-  transmission_system: "DJI O4"
-  max_range_km: "20 km (CE)"
-  max_flight_time_min: "46 min"
-  eu_class_marking: "C1"
-  uk_class_marking: "C1"
-  year_released: 2023
-  notes: "Dual-camera C1 model with O4 link and omnidirectional sensing."
+  - model_key: air-3s
+    marketing_name: DJI Air 3S
+    segment: consumer
+    series: air
+    mtom_g_nominal: 720
+    eu_class_marking: "unknown"
+    uk_class_marking: ""
+    year_released: 2025
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "unknown"
+    operator_id_required: "yes"
+    image_url: images/air-3s.jpg
+    notes: Placeholder class; verify label.
 
-- model_key: air-3s
-  marketing_name: DJI Air 3S
-  segment: consumer
-  series: air
-  image_url: air_3s.png
-  spec_url: "https://www.dji.com/uk/support/product/air-3s"
-  operator_id_required: "yes"
-  sensor: "1-inch CMOS 20 MP"
-  aperture: "f/2.8"
-  video_resolutions: "5.4K @ 60 fps"
-  transmission_system: "DJI O4"
-  max_range_km: "20 km (CE)"
-  max_flight_time_min: "46 min"
-  eu_class_marking: "C1"
-  uk_class_marking: "C1"
-  year_released: 2025
-  notes: "Refined Air platform with 1-inch sensor and O4 link."
+  - model_key: avata
+    marketing_name: DJI Avata
+    segment: consumer
+    series: avata
+    mtom_g_nominal: 410
+    eu_class_marking: legacy
+    uk_class_marking: ""
+    year_released: 2022
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "unknown"
+    operator_id_required: "yes"
+    image_url: images/avata.jpg
+    notes: Ducted cinewhoop; legacy.
 
-- model_key: avata
-  marketing_name: DJI Avata
-  segment: consumer
-  series: avata
-  image_url: avata.jpg
-  spec_url: "https://www.dji.com/uk/support/product/avata"
-  operator_id_required: "yes"
-  sensor: "1/1.7-inch CMOS 48 MP"
-  aperture: "f/2.8"
-  video_resolutions: "4K @ 60 fps"
-  transmission_system: "DJI O3+"
-  max_range_km: "10 km (CE)"
-  max_flight_time_min: "18 min"
-  eu_class_marking: "Legacy"
-  uk_class_marking: "Legacy"
-  year_released: 2022
-  notes: "Cinewhoop FPV ducted design; legacy specific category."
+  - model_key: avata-2
+    marketing_name: DJI Avata 2
+    segment: consumer
+    series: avata
+    mtom_g_nominal: 377
+    eu_class_marking: C1
+    uk_class_marking: ""
+    year_released: 2024
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/avata-2.jpg
+    notes: C1 FPV cinewhoop.
 
-- model_key: avata-2
-  marketing_name: DJI Avata 2
-  segment: consumer
-  series: avata
-  image_url: avata_2.jpg
-  spec_url: "https://www.dji.com/uk/support/product/avata-2"
-  operator_id_required: "yes"
-  sensor: "1/1.3-inch CMOS 12 MP"
-  aperture: "f/2.8"
-  video_resolutions: "4K @ 60 fps"
-  transmission_system: "DJI O4"
-  max_range_km: "13 km (CE)"
-  max_flight_time_min: "23 min"
-  eu_class_marking: "C1"
-  uk_class_marking: "C1"
-  year_released: 2024
-  notes: "C1-certified FPV cinewhoop with O4 link."
+  - model_key: dji-fpv
+    marketing_name: DJI FPV
+    segment: consumer
+    series: fpv
+    mtom_g_nominal: 795
+    eu_class_marking: legacy
+    uk_class_marking: ""
+    year_released: 2021
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "unknown"
+    operator_id_required: "yes"
+    image_url: images/dji-fpv.jpg
+    notes: Hybrid FPV; legacy.
 
-- model_key: dji-fpv
-  marketing_name: DJI FPV
-  segment: consumer
-  series: fpv
-  image_url: fpv.jpg
-  spec_url: "https://www.dji.com/uk/support/product/fpv"
-  operator_id_required: "yes"
-  sensor: "1/2.3-inch CMOS 12 MP"
-  aperture: "f/2.8"
-  video_resolutions: "4K @ 60 fps"
-  transmission_system: "DJI O3"
-  max_range_km: "10 km (CE)"
-  max_flight_time_min: "20 min"
-  eu_class_marking: "Legacy"
-  uk_class_marking: "Legacy"
-  year_released: 2021
-  notes: "Hybrid FPV quad with manual mode and GPS."
+  # ========== PROFESSIONAL ==========
+  - model_key: mavic-3
+    marketing_name: DJI Mavic 3
+    segment: pro
+    series: mavic
+    mtom_g_nominal: 895
+    eu_class_marking: C1
+    uk_class_marking: ""
+    year_released: 2021
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/mavic-3.jpg
+    notes: Dual-camera Hasselblad + tele.
 
-# ========== PROFESSIONAL ==========
-- model_key: mavic-3
-  marketing_name: DJI Mavic 3
-  segment: pro
-  series: mavic
-  image_url: ""   # add e.g. mavic_3.jpg when uploaded
-  spec_url: "https://www.dji.com/uk/support/product/mavic-3"
-  operator_id_required: "yes"
-  sensor: "4/3-inch CMOS (Hasselblad) + 1/2-inch tele"
-  effective_mp: "20 MP"
-  aperture: "f/2.8–f/11"
-  video_resolutions: "5.1K @ 50 fps"
-  transmission_system: "O3+"
-  max_range_km: "15 km (CE)"
-  max_flight_time_min: "46 min"
-  eu_class_marking: "C1"
-  uk_class_marking: "C1"
-  year_released: 2021
-  notes: "C1 dual-camera flagship with omnidirectional sensing."
+  - model_key: mavic-3-classic
+    marketing_name: DJI Mavic 3 Classic
+    segment: pro
+    series: mavic
+    mtom_g_nominal: 895
+    eu_class_marking: C1
+    uk_class_marking: ""
+    year_released: 2022
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/mavic-3-classic.jpg
+    notes: Single Hasselblad camera.
 
-- model_key: mavic-3-classic
-  marketing_name: DJI Mavic 3 Classic
-  segment: pro
-  series: mavic
-  image_url: ""   # add when uploaded
-  spec_url: "https://www.dji.com/uk/support/product/mavic-3-classic"
-  operator_id_required: "yes"
-  sensor: "4/3-inch CMOS Hasselblad 20 MP"
-  aperture: "f/2.8–f/11"
-  video_resolutions: "5.1K @ 50 fps"
-  transmission_system: "O3+"
-  max_range_km: "15 km (CE)"
-  max_flight_time_min: "46 min"
-  eu_class_marking: "C1"
-  uk_class_marking: "C1"
-  year_released: 2022
-  notes: "Single-camera variant of Mavic 3 with C1 label."
+  - model_key: mavic-3-pro
+    marketing_name: DJI Mavic 3 Pro
+    segment: pro
+    series: mavic
+    mtom_g_nominal: 958
+    eu_class_marking: C2
+    uk_class_marking: ""
+    year_released: 2023
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/mavic-3-pro.jpg
+    notes: Triple-camera; C2.
 
-- model_key: mavic-3-pro
-  marketing_name: DJI Mavic 3 Pro
-  segment: pro
-  series: mavic
-  image_url: ""   # add when uploaded
-  spec_url: "https://www.dji.com/uk/support/product/mavic-3-pro"
-  operator_id_required: "yes"
-  sensor: "Triple-camera system (4/3 + 1/1.3 + 1/2)"
-  video_resolutions: "5.1K @ 50 fps; 4K @ 120 fps"
-  transmission_system: "O3+"
-  max_range_km: "15 km (CE)"
-  max_flight_time_min: "43 min"
-  eu_class_marking: "C2"
-  uk_class_marking: "C2"
-  year_released: 2023
-  notes: "C2 triple-camera drone for creative pros."
+  - model_key: inspire-3
+    marketing_name: DJI Inspire 3
+    segment: pro
+    series: inspire
+    mtom_g_nominal: 4310
+    eu_class_marking: "unknown"
+    uk_class_marking: ""
+    year_released: 2023
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/inspire-3.jpg
+    notes: Cinema platform; Specific category common.
 
-- model_key: inspire-3
-  marketing_name: DJI Inspire 3
-  segment: pro
-  series: inspire
-  image_url: ""   # add when uploaded
-  spec_url: "https://www.dji.com/uk/support/product/inspire-3"
-  operator_id_required: "yes"
-  sensor: "Full-frame Zenmuse X9-8K Air"
-  video_resolutions: "8K @ 75 fps (CinemaDNG)"
-  transmission_system: "O3 Pro"
-  max_range_km: "15 km (CE)"
-  max_flight_time_min: "28 min"
-  eu_class_marking: "C3"
-  uk_class_marking: "C3"
-  year_released: 2023
-  notes: "Cinema-grade 8K platform; typically Specific category."
+  # ========== ENTERPRISE ==========
+  - model_key: mavic-3e
+    marketing_name: DJI Mavic 3E (Enterprise)
+    segment: enterprise
+    series: mavic-enterprise
+    mtom_g_nominal: 915
+    eu_class_marking: "unknown"
+    uk_class_marking: ""
+    year_released: 2022
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/mavic-3e.jpg
+    notes: Mapping + RTK.
 
-# ========== ENTERPRISE ==========
-- model_key: mavic-3e
-  marketing_name: DJI Mavic 3E (Enterprise)
-  segment: enterprise
-  series: mavic-enterprise
-  image_url: ""   # add when uploaded
-  spec_url: "https://www.dji.com/uk/mavic-3-enterprise/specs"
-  operator_id_required: "yes"
-  sensor: "4/3-inch CMOS + 1/2 telephoto"
-  video_resolutions: "4K @ 30 fps"
-  transmission_system: "O3 Enterprise"
-  max_range_km: "15 km (CE)"
-  max_flight_time_min: "45 min"
-  eu_class_marking: "C2"
-  uk_class_marking: "C2"
-  year_released: 2022
-  notes: "Enterprise variant with mapping, RTK, and accessories."
+  - model_key: mavic-3t
+    marketing_name: DJI Mavic 3T (Thermal)
+    segment: enterprise
+    series: mavic-enterprise
+    mtom_g_nominal: 920
+    eu_class_marking: "unknown"
+    uk_class_marking: ""
+    year_released: 2022
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/mavic-3t.jpg
+    notes: Thermal variant.
 
-- model_key: mavic-3t
-  marketing_name: DJI Mavic 3T (Thermal)
-  segment: enterprise
-  series: mavic-enterprise
-  image_url: ""   # add when uploaded
-  spec_url: "https://www.dji.com/uk/mavic-3-enterprise/specs"
-  operator_id_required: "yes"
-  sensor: "4/3-inch CMOS + tele + thermal 640×512"
-  video_resolutions: "4K @ 30 fps"
-  transmission_system: "O3 Enterprise"
-  max_range_km: "15 km (CE)"
-  max_flight_time_min: "45 min"
-  eu_class_marking: "C2"
-  uk_class_marking: "C2"
-  year_released: 2022
-  notes: "Thermal version for search/rescue and inspection."
+  - model_key: matrice-30
+    marketing_name: DJI Matrice 30
+    segment: enterprise
+    series: m-series
+    mtom_g_nominal: 3770
+    eu_class_marking: "unknown"
+    uk_class_marking: ""
+    year_released: 2022
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/matrice-30.jpg
+    notes: IP55; enterprise foldable.
 
-- model_key: matrice-30
-  marketing_name: DJI Matrice 30
-  segment: enterprise
-  series: m-series
-  image_url: ""   # add when uploaded
-  spec_url: "https://www.dji.com/uk/matrice-30/specs"
-  operator_id_required: "yes"
-  sensor: "Wide + tele + laser rangefinder"
-  video_resolutions: "4K @ 30 fps"
-  transmission_system: "O3 Enterprise"
-  max_range_km: "15 km (CE)"
-  max_flight_time_min: "41 min"
-  eu_class_marking: "C3"
-  uk_class_marking: "C3"
-  year_released: 2022
-  notes: "IP55-rated foldable enterprise platform."
+  - model_key: matrice-30t
+    marketing_name: DJI Matrice 30T
+    segment: enterprise
+    series: m-series
+    mtom_g_nominal: 3770
+    eu_class_marking: "unknown"
+    uk_class_marking: ""
+    year_released: 2022
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/matrice-30t.jpg
+    notes: Thermal.
 
-- model_key: matrice-4t
-  marketing_name: DJI Matrice 4T
-  segment: enterprise
-  series: matrice
-  image_url: ""   # add when uploaded
-  spec_url: "https://www.dji.com/uk/matrice-4t/specs"
-  operator_id_required: "yes"
-  sensor: "Wide + zoom + thermal + laser rangefinder"
-  video_resolutions: "4K @ 30 fps"
-  transmission_system: "O4 Enterprise"
-  max_range_km: "20 km (CE)"
-  max_flight_time_min: "45 min"
-  eu_class_marking: "C3"
-  uk_class_marking: "C3"
-  year_released: 2024
-  notes: "Flagship inspection platform with O4 Enterprise link."
+  - model_key: matrice-4e
+    marketing_name: DJI Matrice 4E
+    segment: enterprise
+    series: matrice
+    mtom_g_nominal: 3900
+    eu_class_marking: "unknown"
+    uk_class_marking: ""
+    year_released: 2024
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/matrice-4e.jpg
+    notes: Enterprise payload platform.
 
-- model_key: m350-rtk
-  marketing_name: DJI M350 RTK
-  segment: enterprise
-  series: m-series
-  image_url: ""   # add when uploaded
-  spec_url: "https://www.dji.com/uk/matrice-350-rtk/specs"
-  operator_id_required: "yes"
-  sensor: "Payload agnostic"
-  video_resolutions: "-"
-  transmission_system: "O3 Enterprise"
-  max_range_km: "15 km (CE)"
-  max_flight_time_min: "55 min"
-  eu_class_marking: "C3"
-  uk_class_marking: "C3"
-  year_released: 2023
-  notes: "Heavy-lift industrial drone; Specific category."
+  - model_key: matrice-4t
+    marketing_name: DJI Matrice 4T
+    segment: enterprise
+    series: matrice
+    mtom_g_nominal: 4000
+    eu_class_marking: "unknown"
+    uk_class_marking: ""
+    year_released: 2024
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/matrice-4t.jpg
+    notes: Thermal flagship.
 
+  - model_key: m300-rtk
+    marketing_name: DJI M300 RTK
+    segment: enterprise
+    series: m-series
+    mtom_g_nominal: 3700
+    eu_class_marking: "unknown"
+    uk_class_marking: ""
+    year_released: 2020
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/m300-rtk.jpg
+    notes: Workhorse; Specific category.
+
+  - model_key: m350-rtk
+    marketing_name: DJI M350 RTK
+    segment: enterprise
+    series: m-series
+    mtom_g_nominal: 3850
+    eu_class_marking: "unknown"
+    uk_class_marking: ""
+    year_released: 2023
+    has_camera: "yes"
+    geo_awareness: "yes"
+    remote_id_builtin: "yes"
+    operator_id_required: "yes"
+    image_url: images/m350-rtk.jpg
+    notes: Successor to M300 RTK.
