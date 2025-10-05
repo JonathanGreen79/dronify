@@ -202,7 +202,7 @@ def render_two_rows(title: str, items: list[str]):
 if not segment:
     # Stage 1 — choose group (horizontal)
     items = []
-    for seg in taxonomy["segments"]]:
+    for seg in taxonomy["segments"]:
         img = SEGMENT_HERO.get(seg["key"], "")
         items.append(card_link(f"segment={seg['key']}", seg["label"], img_url=img))
     render_row("Choose your drone category", items)
@@ -328,3 +328,4 @@ else:
                 )
             )
         render_two_rows(f"Choose a drone ({seg_label} → {ser_label})", items)
+
