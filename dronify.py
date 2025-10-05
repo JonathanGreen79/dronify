@@ -52,7 +52,7 @@ def resolve_img(url: str) -> str:
     return RAW_BASE + url.lstrip("/")
 
 # ---------------------------------------------------------------------
-# UI CSS  (updated: grid2 and headers, removed grid3)
+# UI CSS  (grid3 restored; grid2 kept in case you need it elsewhere)
 # ---------------------------------------------------------------------
 st.markdown(
     """
@@ -102,15 +102,20 @@ section[data-testid="stSidebar"] label p { font-size: .9rem; margin: 0; }
 .legend { margin-top: 8px; border-top:1px solid #E5E7EB; padding-top:6px; }
 .legend .badge { margin-right:6px; }
 
-/* TWO-column GRID per row so all bricks align (updated) */
+/* TWO-column GRID (kept) */
 .grid2 { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; align-items: stretch; }
 .grid2 > div { display:flex; }
 
-/* Header cells */
-.hdrcell { font-weight:800; font-size:1.15rem; color:#111827; }
+/* THREE-column GRID */
+.grid3 { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; align-items: stretch; }
+.grid3 > div { display:flex; }
 
-/* Vertical dividers between columns */
-.divided.grid2 > div:not(:first-child) {
+/* Header cells (if you want the bold style elsewhere) */
+.hdrcell { font-weight:800; font-size:1.05rem; color:#111827; }
+
+/* Vertical dividers */
+.divided.grid2 > div:not(:first-child),
+.divided.grid3 > div:not(:first-child) {
   border-left: 1px solid #EDEFF3;
   padding-left: 12px;
 }
@@ -525,7 +530,7 @@ else:
             unsafe_allow_html=True,
         )
 
-        # Credentials (compact) — removed A1/A3 training; renamed Flyer ID
+        # Credentials (compact)
         st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
         have_op   = st.sidebar.checkbox("Operator ID", value=False, key="c_op")
         have_fl   = st.sidebar.checkbox("Flyer ID", value=False, key="c_fl")
@@ -537,47 +542,57 @@ else:
         # --------- Compute all bricks (UK by default) ---------
         a_now = compute_bricks(row, creds, 2025, jurisdiction="UK")
         a_26  = compute_bricks(row, creds, 2026, jurisdiction="UK")
+        a_28  = compute_bricks(row, creds, 2028, jurisdiction="UK")
 
-        # ---------- HEADERS (Now | 2026–2027 bridge) ----------
+        # ---------- HEADERS AS FIRST GRID ROW (3 columns, no fill/border) ----------
         st.markdown(
-            """
-<div class='grid2 divided' style='margin:4px 0 10px'>
-  <div><div class='hdrcell'>Now – 31 Dec 2025</div></div>
-  <div><div class='hdrcell'>1 Jan 2026 – 31 Dec 2027 (UK–EU bridge)</div></div>
-</div>
-""",
+            "<div class='grid3 divided' style='margin:0 0 8px 0;'>"
+            "<div style='text-align:center;font-weight:600;font-size:.95rem;color:#374151;margin-bottom:4px;'>"
+            "Now – 31 Dec 2025"
+            "</div>"
+            "<div style='text-align:center;font-weight:600;font-size:.95rem;color:#374151;margin-bottom:4px;'>"
+            "1 Jan 2026 – 31 Dec 2027 (UK–EU bridge)"
+            "</div>"
+            "<div style='text-align:center;font-weight:600;font-size:.95rem;color:#374151;margin-bottom:4px;'>"
+            "From 1 Jan 2028 (planned)"
+            "</div>"
+            "</div>",
             unsafe_allow_html=True,
         )
 
-        # Row 1: A1 across 2 cells
+        # Row 1: A1 across 3 cells
         st.markdown(
-            "<div class='grid2 divided'>"
+            "<div class='grid3 divided'>"
             f"<div>{a_now[0]}</div>"
             f"<div>{a_26[0]}</div>"
+            f"<div>{a_28[0]}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
-        # Row 2: A2 across 2 cells
+        # Row 2: A2 across 3 cells
         st.markdown(
-            "<div class='grid2 divided'>"
+            "<div class='grid3 divided'>"
             f"<div>{a_now[1]}</div>"
             f"<div>{a_26[1]}</div>"
+            f"<div>{a_28[1]}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
-        # Row 3: A3 across 2 cells
+        # Row 3: A3 across 3 cells
         st.markdown(
-            "<div class='grid2 divided'>"
+            "<div class='grid3 divided'>"
             f"<div>{a_now[2]}</div>"
             f"<div>{a_26[2]}</div>"
+            f"<div>{a_28[2]}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
-        # Row 4: Specific across 2 cells
+        # Row 4: Specific across 3 cells
         st.markdown(
-            "<div class='grid2 divided'>"
+            "<div class='grid3 divided'>"
             f"<div>{a_now[3]}</div>"
             f"<div>{a_26[3]}</div>"
+            f"<div>{a_28[3]}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
