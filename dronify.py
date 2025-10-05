@@ -1,6 +1,6 @@
 # dronify.py — clickable cards (same tab via anchors), uniform images,
 # Stage2 random per-series image, Stage3 two-row grid,
-# natural/human sorting by series → marketing_name (Pandas 2.x safe)
+# natural/human sorting by series → marketing_name (Pandas 2.x safe via padded-string keys)
 
 import re
 import random
@@ -69,28 +69,33 @@ def series_defs_for(segment_key: str):
     return [s for s in seg["series"]
             if not df[(df["segment"] == segment_key) & (df["series"] == s["key"])].empty]
 
-def natural_key(text: str):
-    """Split text into text/number chunks for human/natural sorting."""
-    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', str(text))]
+def pad_digits_for_natural(series: pd.Series, width: int = 6) -> pd.Series:
+    """
+    Convert strings to lowercase and pad every number with leading zeros.
+    'Mini 2 SE' -> 'mini 000002 se'
+    This yields a string that sorts naturally with standard lexicographic sort.
+    """
+    s = series.astype(str).str.lower()
+    return s.str.replace(r"\d+", lambda m: f"{int(m.group(0)):0{width}d}", regex=True)
 
 def models_for(segment_key: str, series_key: str):
     """
     Return models in segment+series, sorted *naturally* by:
-      1) series
+      1) series (not really needed inside a single series, but harmless)
       2) marketing_name
-    (Pandas 2.x safe: apply key() once by sorting derived string columns.)
+    Uses padded-string helpers (no key=) to be Pandas 2.x safe.
     """
     subset = df[(df["segment"] == segment_key) & (df["series"] == series_key)].copy()
 
-    subset["series_sort"] = subset["series"].astype(str)
-    subset["name_sort"]   = subset["marketing_name"].astype(str)
+    subset["series_key"] = pad_digits_for_natural(subset["series"])
+    subset["name_key"]   = pad_digits_for_natural(subset["marketing_name"])
 
     subset = subset.sort_values(
-        by=["series_sort", "name_sort"],
-        key=lambda col: col.map(natural_key),
+        by=["series_key", "name_key", "marketing_name"],  # final tie-breaker keeps original name order
+        kind="stable",
         ignore_index=True
     )
-    return subset.drop(columns=["series_sort", "name_sort"])
+    return subset.drop(columns=["series_key", "name_key"])
 
 def random_image_for_series(segment_key: str, series_key: str) -> str:
     """Pick a random image from models in the given segment+series."""
@@ -163,7 +168,7 @@ st.markdown("""
 def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
     """
     qs example: 'segment=consumer' or 'segment=consumer&series=mini'
-    We use a plain anchor with target="_self" to stay in the same tab.
+    Plain anchor with target="_self" stays in same tab.
     """
     img = f"<div class='img'><img src='{img_url}' alt=''/></div>" if img_url else "<div class='img'></div>"
     sub_html = f"<div class='sub'>{sub}</div>" if sub else ""
