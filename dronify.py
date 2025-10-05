@@ -531,8 +531,8 @@ elif not series:
     # Stage 2: choose series (random image)
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     # Restart button (replaces the old back link)
-    if st.sidebar.button("Restart"):
-        restart_app()
+    ## if st.sidebar.button("Restart"):
+       ## restart_app()
 
     items = []
     for s in series_defs_for(segment):
@@ -684,4 +684,5 @@ else:
             f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
             unsafe_allow_html=True,
         )
+
 
