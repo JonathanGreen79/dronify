@@ -656,8 +656,8 @@ else:
 
     else:
         # No model selected -> models grid
-        if st.sidebar.button("Restart"):
-            restart_app()
+        #if st.sidebar.button("Restart"):
+         #   restart_app()
 
         st.markdown(f"<div class='h1'>Choose a drone ({seg_label} → {ser_label})</div>", unsafe_allow_html=True)
         models = models_for(segment, series)
@@ -684,5 +684,6 @@ else:
             f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
             unsafe_allow_html=True,
         )
+
 
 
