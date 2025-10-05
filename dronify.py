@@ -176,7 +176,7 @@ def models_for(segment_key: str, series_key: str):
         subset["marketing_name"]
         .astype(str)
         .str.lower()
-        .str.replace(r"\\d+", lambda m: f"{int(m.group(0)):06d}", regex=True)
+        .str.replace(r"\d+", lambda m: f"{int(m.group(0)):06d}", regex=True)
     )
     subset = subset.sort_values(
         by=["name_key", "marketing_name"], kind="stable", ignore_index=True
@@ -186,17 +186,17 @@ def models_for(segment_key: str, series_key: str):
 
 # ---------- Brick rendering ----------
 def pill_ok(txt, title=None):
-    t = f" title=\\"{title}\\"" if title else ""
+    t = f' title="{title}"' if title else ""
     return f"<span class='pill pill-ok'{t}>{txt}</span>"
 
 
 def pill_need(txt, title=None):
-    t = f" title=\\"{title}\\"" if title else ""
+    t = f' title="{title}"' if title else ""
     return f"<span class='pill pill-need'{t}>{txt}</span>"
 
 
 def pill_info(txt, title=None):
-    t = f" title=\\"{title}\\"" if title else ""
+    t = f' title="{title}"' if title else ""
     return f"<span class='pill pill-info'{t}>{txt}</span>"
 
 
