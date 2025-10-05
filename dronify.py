@@ -1,4 +1,7 @@
-# dronify.py — horizontal clickable cards, uniform image sizes, stage3 two-row grid
+# dronify.py — horizontal clickable cards, uniform images, Stage2 random per-series image,
+# Stage3 two-row grid, and natural/human sorting by series → marketing_name.
+
+import re
 import random
 import streamlit as st
 import pandas as pd
@@ -20,7 +23,7 @@ def load_data():
     dataset = load_yaml(DATASET_PATH)
     taxonomy = load_yaml(TAXONOMY_PATH)
     df = pd.DataFrame(dataset["data"])
-    # ensure columns exist
+    # Ensure columns exist so UI never breaks
     for col in ("image_url", "segment", "series", "class_marking", "weight_band"):
         if col not in df.columns:
             df[col] = ""
@@ -28,20 +31,20 @@ def load_data():
 
 df, taxonomy = load_data()
 
-# ---------- Query-param state (no JS/buttons; pure anchors) ----------
+# ---------- Query-param state (pure anchors; no buttons) ----------
 def get_qp():
     try:
         return dict(st.query_params)
     except Exception:
-        # fallback older Streamlit
+        # legacy fallback
         return {k: (v[0] if isinstance(v, list) else v) for k, v in st.experimental_get_query_params().items()}
 
 qp = get_qp()
-segment = qp.get("segment")           # None | 'consumer'|'pro'|'enterprise'
-series  = qp.get("series")            # None | series key
-model   = qp.get("model")             # None | model_key
+segment = qp.get("segment")   # e.g. 'consumer' | 'pro' | 'enterprise' | None
+series  = qp.get("series")    # series key or None
+model   = qp.get("model")     # model_key or None
 
-# ---------- Image resolver (use GitHub Raw for repo images/) ----------
+# ---------- Image resolver (serve repo images via GitHub Raw) ----------
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
 def resolve_img(url: str) -> str:
@@ -61,22 +64,32 @@ SEGMENT_HERO = {
 # ---------- Helpers ----------
 def series_defs_for(segment_key: str):
     seg = next(s for s in taxonomy["segments"] if s["key"] == segment_key)
-    # include series that actually have models
+    # only include series that actually have models
     return [s for s in seg["series"]
             if not df[(df["segment"] == segment_key) & (df["series"] == s["key"])].empty]
 
-import re
+def natural_key(text: str):
+    """Split text into text/number chunks for human/natural sorting."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', str(text))]
 
 def models_for(segment_key: str, series_key: str):
+    """
+    Return models in segment+series, sorted *naturally* by:
+      1) series
+      2) marketing_name
+    """
     subset = df[(df["segment"] == segment_key) & (df["series"] == series_key)].copy()
-
-    def alphanum_key(name: str):
-        """Split string into text and numeric chunks for natural sorting."""
-        return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', str(name))]
-
-    return subset.sort_values(by="marketing_name", key=lambda col: col.map(alphanum_key))
+    # Optional refinement: group by series first, then natural sort by marketing_name
+    # (series grouping is mostly redundant inside one series, but keeps behavior consistent across all series)
+    subset = subset.sort_values(
+        by=["series", "marketing_name"],
+        key=lambda col: col.map(natural_key),
+        ignore_index=True
+    )
+    return subset
 
 def random_image_for_series(segment_key: str, series_key: str) -> str:
+    """Pick a random image from models in the given segment+series."""
     subset = df[
         (df["segment"] == segment_key)
         & (df["series"] == series_key)
@@ -84,13 +97,13 @@ def random_image_for_series(segment_key: str, series_key: str) -> str:
     ]
     if subset.empty:
         return SEGMENT_HERO.get(segment_key, "")
-    return resolve_img(str(subset.sample(1)["image_url"].iloc[0]))
+    return resolve_img(str(subset.sample(1, random_state=None)["image_url"].iloc[0]))
 
 # ---------- Styles ----------
 st.markdown("""
 <style>
 /* Headings spacing */
-.block-container { padding-top: 1.2rem; }
+.block-container { padding-top: 1.1rem; }
 
 /* shared card look */
 .card {
@@ -115,10 +128,10 @@ st.markdown("""
   overflow: hidden;
   display: flex; align-items: center; justify-content: center;
 }
-.img > img { width: 100%; height: 100%; object-fit: cover; }  /* same size look */
+.img > img { width: 100%; height: 100%; object-fit: cover; }  /* same-size look */
 
 .title { margin-top: 10px; text-align: center; font-weight: 700; font-size: 0.98rem; }
-.sub    { margin-top: 4px; text-align: center; font-size: .8rem; color: #6B7280; }
+.sub    { margin-top: 4px;  text-align: center; font-size: .8rem; color: #6B7280; }
 
 /* horizontal strip (stage 1 & 2) */
 .strip {
@@ -143,7 +156,6 @@ st.markdown("""
 
 def card_link(href: str, title: str, sub: str = "", img_url: str = "") -> str:
     img = f"<div class='img'><img src='{img_url}' alt=''/></div>" if img_url else "<div class='img'></div>"
-    # full card is clickable via anchor
     return f"<a class='card' href='{href}'>{img}<div class='title'>{title}</div>" + (f"<div class='sub'>{sub}</div>" if sub else "") + "</a>"
 
 def render_row(title: str, items: list[str]):
@@ -154,7 +166,7 @@ def render_two_rows(title: str, items: list[str]):
 
 # ---------- Screens ----------
 if not segment:
-    # Stage 1 — choose group (horizontal, clickable, uniform image sizes)
+    # Stage 1 — choose group
     items = []
     for seg in taxonomy["segments"]:
         img = SEGMENT_HERO.get(seg["key"], "")
@@ -162,7 +174,7 @@ if not segment:
     render_row("Choose your drone category", items)
 
 elif not series:
-    # Stage 2 — choose series (horizontal, random image from that series only)
+    # Stage 2 — choose series (random image from that series only)
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     items = []
     for s in series_defs_for(segment):
@@ -206,4 +218,3 @@ else:
                 eu = row.get("eu_class_marking", row.get("class_marking", "unknown"))
                 uk = row.get("uk_class_marking", row.get("class_marking", "unknown"))
                 st.metric("EU / UK Class", f"{eu} / {uk}")
-
