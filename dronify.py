@@ -1,16 +1,15 @@
-# dronify.py — Stage1: segment images; Stage2: random image per card; Stage3: 2-row grid
 import random
 import streamlit as st
 import pandas as pd
 import yaml
 from pathlib import Path
 
-st.set_page_config(page_title="Drone Picker", layout="wide")
+st.set_page_config(page_title="Dronify", layout="wide")
 
+# ---------------- Load YAML ---------------- #
 DATASET_PATH = Path("dji_drones_v3.yaml")
 TAXONOMY_PATH = Path("taxonomy.yaml")
 
-# ---------- Data loading ----------
 def load_yaml(path: Path):
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -20,194 +19,151 @@ def load_data():
     dataset = load_yaml(DATASET_PATH)
     taxonomy = load_yaml(TAXONOMY_PATH)
     df = pd.DataFrame(dataset["data"])
-    for col in ("eu_class_marking","uk_class_marking","image_url","segment","series"):
-        if col not in df.columns:
-            df[col] = ""
     return df, taxonomy
 
 df, taxonomy = load_data()
 
-# ---------- Image URL resolver (GitHub Raw for repo images/) ----------
+# ---------------- Image Handling ---------------- #
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
-def resolve_img(url: str) -> str:
-    if not url:
+def resolve_img(filename: str):
+    if not filename:
         return ""
-    if url.startswith("images/"):
-        return RAW_BASE + url.split("/", 1)[1]
-    return url
+    if filename.startswith("images/"):
+        filename = filename.split("/", 1)[1]
+    return f"{RAW_BASE}{filename}"
 
-# Segment hero images for Stage 1
-SEGMENT_HERO = {
-    "consumer": resolve_img("images/consumer.jpg"),
-    "pro":       resolve_img("images/professional.jpg"),
-    "enterprise":resolve_img("images/enterprise.jpg"),
+SEGMENT_IMAGES = {
+    "consumer": resolve_img("consumer.jpg"),
+    "pro": resolve_img("professional.jpg"),
+    "enterprise": resolve_img("enterprise.jpg"),
 }
 
-# ---------- Query-param driven state ----------
-ss = st.session_state
-ss.setdefault("segment", None)
-ss.setdefault("series", None)
-ss.setdefault("model_key", None)
-
-def get_qp():
-    try:
-        return dict(st.query_params)
-    except Exception:
-        return {k:(v[0] if isinstance(v, list) else v) for k,v in st.experimental_get_query_params().items()}
-
-qp = get_qp()
-if "segment" in qp and qp["segment"] != ss.segment:
-    ss.segment, ss.series, ss.model_key = qp["segment"], None, None
-if "series" in qp and qp["series"] != ss.series:
-    ss.series, ss.model_key = qp["series"], None
-if "model" in qp and qp["model"] != ss.model_key:
-    ss.model_key = qp["model"]
-
-# ---------- Helpers ----------
-def series_defs_for(segment_key: str):
-    seg = next(s for s in taxonomy["segments"] if s["key"] == segment_key)
-    return [s for s in seg["series"]
-            if not df[(df["segment"] == segment_key) & (df["series"] == s["key"])].empty]
-
-def models_for(segment_key: str, series_key: str):
-    return df[(df["segment"] == segment_key) & (df["series"] == series_key)].sort_values("marketing_name")
-
-def random_image_for_segment(segment_key: str) -> str:
-    """Pick a random image_url from any model in the segment; fallback to hero image."""
-    candidates = df[(df["segment"] == segment_key) & (df["image_url"].astype(str) != "")]
-    if not candidates.empty:
-        url = random.choice(list(candidates["image_url"]))
-        return resolve_img(str(url))
-    # fallback to segment hero if available
-    return SEGMENT_HERO.get(segment_key, "")
-
-# ---------- Styles ----------
-CSS = """
+# ---------------- Style ---------------- #
+st.markdown("""
 <style>
-.card{
-  flex:0 0 240px;
-  height:220px;
-  border:1px solid #E5E7EB;
-  border-radius:14px;
-  background:#fff;
-  text-decoration:none;
-  color:#111827;
-  display:block;
-  padding:10px;
-  transition:all .15s ease-in-out;
-}
-.card:hover{ border-color:#D1D5DB; box-shadow:0 4px 16px rgba(0,0,0,.06) }
-.img{
-  width:100%; height:130px; border-radius:10px; background:#F3F4F6;
-  display:flex; align-items:center; justify-content:center;
-  font-size:.8rem; color:#6B7280; margin-bottom:8px; overflow:hidden;
-}
-.title{ font-weight:600; font-size:.95rem; line-height:1.15 }
-.sub{ font-size:.78rem; color:#6B7280; margin-top:4px }
-.h1{ font-weight:700; font-size:1.05rem; margin:0 0 10px 0; color:#374151 }
-
-/* stage 1 & 2: one-row strip */
-.strip{
-  display:flex; flex-wrap:nowrap; gap:12px; overflow-x:auto; padding:6px 2px; margin:0;
-}
-
-/* stage 3: two-row horizontal grid */
-.strip2{
-  display:grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 240px;
-  grid-template-rows: repeat(2, 1fr);
-  gap: 12px;
-  overflow-x: auto;
-  padding: 6px 2px; margin: 0;
-}
-
-.summary{ border:1px solid #E5E7EB; border-radius:12px; padding:12px; background:#fff }
-.summary .lab{ font-size:.78rem; color:#6B7280; margin-bottom:4px }
-.summary .val{ font-size:1.05rem; font-weight:600 }
+    .stApp {
+        background-color: #fafafa;
+    }
+    .card {
+        background-color: white;
+        border: 1px solid #ddd;
+        border-radius: 12px;
+        padding: 10px;
+        text-align: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        transition: all 0.2s ease-in-out;
+    }
+    .card:hover {
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        transform: translateY(-2px);
+    }
+    .card img {
+        width: 180px;
+        height: 120px;
+        object-fit: contain;
+        margin-bottom: 8px;
+    }
+    .card-title {
+        font-weight: 600;
+        color: #222 !important;
+        text-decoration: none !important;
+    }
+    .card-sub {
+        font-size: 13px;
+        color: #666;
+    }
+    .center {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin-top: 20px;
+    }
 </style>
-"""
+""", unsafe_allow_html=True)
 
-def card_html(href: str, title: str, sub: str = "", img_url: str = "") -> str:
-    img = f"<img src='{img_url}' class='img' style='object-fit:cover'/>" if img_url else "<div class='img'>image</div>"
-    return f"<a class='card' href='{href}' target='_self'>{img}<div class='title'>{title}</div><div class='sub'>{sub}</div></a>"
+# ---------------- Step 1: Select Segment ---------------- #
+if "stage" not in st.session_state:
+    st.session_state.stage = 1
+if "segment" not in st.session_state:
+    st.session_state.segment = None
+if "series" not in st.session_state:
+    st.session_state.series = None
 
-def render_strip(title: str, items: list[str]):
-    st.markdown(CSS + f"<div class='h1'>{title}</div><div class='strip'>{''.join(items)}</div>", unsafe_allow_html=True)
+def reset_to_stage(stage):
+    st.session_state.stage = stage
 
-def render_strip_two_rows(title: str, items: list[str]):
-    st.markdown(CSS + f"<div class='h1'>{title}</div><div class='strip2'>{''.join(items)}</div>", unsafe_allow_html=True)
+if st.session_state.stage == 1:
+    st.subheader("Choose your drone category")
 
-# ---------- Screens ----------
-if ss.segment is None:
-    # Stage 1 — groups (with hero images)
-    items = []
-    for seg in taxonomy["segments"]:
-        hero = SEGMENT_HERO.get(seg["key"], "")
-        items.append(card_html(f"?segment={seg['key']}", seg["label"], img_url=hero))
-    render_strip("Choose your group", items)
+    cols = st.columns(3, gap="large")
+    for idx, (seg, img) in enumerate(SEGMENT_IMAGES.items()):
+        with cols[idx]:
+            if st.button("", key=f"seg_btn_{seg}"):
+                st.session_state.segment = seg
+                st.session_state.stage = 2
+            st.markdown(f"""
+                <div class="card" onclick="document.querySelector('[data-testid=stButton][key=seg_btn_{seg}] button').click()">
+                    <img src="{img}" alt="{seg}">
+                    <div class="card-title">{seg.capitalize()}</div>
+                </div>
+            """, unsafe_allow_html=True)
 
-elif ss.series is None:
-    # Stage 2 — series for selected group (random image pulled from ANY model in the segment)
-    seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == ss.segment)
-    sdefs = series_defs_for(ss.segment)
-    items = []
-    for s in sdefs:
-        random_img = random_image_for_segment(ss.segment)  # may differ each run
-        items.append(card_html(f"?segment={ss.segment}&series={s['key']}", s["label"], img_url=random_img))
-    render_strip(f"Choose a series ({seg_label})", items)
+# ---------------- Step 2: Select Series ---------------- #
+elif st.session_state.stage == 2:
+    seg = st.session_state.segment
+    st.subheader(f"Choose a series ({seg.capitalize()})")
 
-else:
-    # Stage 3 — models (two-row horizontal grid)
-    seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == ss.segment)
-    ser_label = next(s["label"] for s in series_defs_for(ss.segment) if s["key"] == ss.series)
+    series_list = sorted(df.loc[df["segment"] == seg, "series"].dropna().unique())
 
-    models = models_for(ss.segment, ss.series)
-    if models.empty:
-        st.info("No models in this series yet.")
-    else:
-        items = []
-        for _, r in models.iterrows():
-            subbits = []
-            cm = r.get("class_marking", "unknown")
-            if isinstance(cm, str):
-                subbits.append(f"Class: {cm}")
-            wb = r.get("weight_band", "")
-            if isinstance(wb, str) and wb:
-                subbits.append(f"Weight: {wb}")
-            sub = " • ".join(subbits)
-            img_url = resolve_img(str(r.get("image_url", "")))
-            items.append(card_html(
-                f"?segment={ss.segment}&series={ss.series}&model={r['model_key']}",
-                r["marketing_name"], sub=sub, img_url=img_url
-            ))
-        render_strip_two_rows(f"Choose a drone ({seg_label} → {ser_label})", items)
+    st.markdown('<div class="center">', unsafe_allow_html=True)
+    for s in series_list:
+        subset = df[(df["segment"] == seg) & (df["series"] == s)]
+        if not subset.empty:
+            chosen = subset.sample(1).iloc[0]
+            img_file = chosen.get("image_url", "")
+            img = resolve_img(img_file)
+        else:
+            img = resolve_img("consumer.jpg")
 
-    # summary appears after user clicks a model
-    if ss.model_key:
-        sel = df[df["model_key"] == ss.model_key].iloc[0]
-        st.markdown("---")
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.markdown(
-                f"<div class='summary'><div class='lab'>MTOW (g)</div><div class='val'>{sel.get('mtom_g_nominal','—')}</div></div>",
-                unsafe_allow_html=True
-            )
-        with c2:
-            st.markdown(
-                f"<div class='summary'><div class='lab'>Name</div><div class='val'>{sel.get('marketing_name','—')}</div></div>",
-                unsafe_allow_html=True
-            )
-        with c3:
-            st.markdown(
-                f"<div class='summary'><div class='lab'>Model Key</div><div class='val'>{sel.get('model_key','—')}</div></div>",
-                unsafe_allow_html=True
-            )
-        with c4:
-            eu = sel.get("eu_class_marking", sel.get("class_marking","unknown"))
-            uk = sel.get("uk_class_marking", sel.get("class_marking","unknown"))
-            st.markdown(
-                f"<div class='summary'><div class='lab'>EU / UK Class</div><div class='val'>{eu} / {uk}</div></div>",
-                unsafe_allow_html=True
-            )
+        st.markdown(f"""
+        <div class="card" onclick="fetch('/?series={s}')">
+            <img src="{img}" alt="{s}">
+            <div class="card-title">{s.title()} Series</div>
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    for s in series_list:
+        if st.button(f"Select {s}", key=f"series_{s}"):
+            st.session_state.series = s
+            st.session_state.stage = 3
+
+# ---------------- Step 3: Select Model ---------------- #
+elif st.session_state.stage == 3:
+    seg = st.session_state.segment
+    ser = st.session_state.series
+    st.subheader(f"Choose a drone ({seg.capitalize()} → {ser.title()} Series)")
+
+    models = df[(df["segment"] == seg) & (df["series"] == ser)]
+
+    st.markdown('<div class="center">', unsafe_allow_html=True)
+    for _, row in models.iterrows():
+        img = resolve_img(row.get("image_url", ""))
+        name = row.get("marketing_name", "")
+        weight = row.get("weight_band", "unknown")
+        cls = row.get("class_marking", "unknown")
+
+        st.markdown(f"""
+        <div class="card">
+            <img src="{img}" alt="{name}">
+            <div class="card-title">{name}</div>
+            <div class="card-sub">Class: {cls} • Weight: {weight}</div>
+        </div>
+        """, unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if st.button("← Back"):
+        reset_to_stage(2)
