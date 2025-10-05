@@ -52,7 +52,7 @@ def resolve_img(url: str) -> str:
     return RAW_BASE + url.lstrip("/")
 
 # ---------------------------------------------------------------------
-# UI CSS  (grid3 restored; grid2 kept in case you need it elsewhere)
+# UI CSS
 # ---------------------------------------------------------------------
 st.markdown(
     """
@@ -98,23 +98,14 @@ section[data-testid="stSidebar"] label p { font-size: .9rem; margin: 0; }
 .flagline img { width: 20px; height: 14px; border-radius:2px; box-shadow:0 0 0 1px rgba(0,0,0,.06); }
 .small { font-size:.85em; color:#374151; }
 
-/* Legend */
-.legend { margin-top: 8px; border-top:1px solid #E5E7EB; padding-top:6px; }
-.legend .badge { margin-right:6px; }
-
-/* TWO-column GRID (kept) */
-.grid2 { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px; align-items: stretch; }
-.grid2 > div { display:flex; }
-
-/* THREE-column GRID */
+/* Three-column GRID */
 .grid3 { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; align-items: stretch; }
 .grid3 > div { display:flex; }
 
-/* Header cells (if you want the bold style elsewhere) */
+/* Header cells */
 .hdrcell { font-weight:800; font-size:1.05rem; color:#111827; }
 
 /* Vertical dividers */
-.divided.grid2 > div:not(:first-child),
 .divided.grid3 > div:not(:first-child) {
   border-left: 1px solid #EDEFF3;
   padding-left: 12px;
@@ -226,37 +217,7 @@ def yesish(val: str) -> bool:
     return str(val).strip().lower() in {"yes", "true", "1", "ok"}
 
 # ---------------------------------------------------------------------
-# Rule text (kept simple; you can swap to jurisdiction-specific strings)
-# ---------------------------------------------------------------------
-def rule_text_a1():
-    return (
-        "Fly close to people; avoid assemblies/crowds. TOAL: sensible separation; "
-        "follow local restrictions."
-    )
-
-def rule_text_a2(year: int):
-    if year < 2026:
-        return (
-            "A2 mainly for C2 drones (sometimes C1 by nuance). Transitional (≤2 kg) "
-            "until Jan 2026: keep ≥50 m from uninvolved people."
-        )
-    return "C2/UK2: keep 30 m from uninvolved people (5 m in low-speed)."
-
-def rule_text_a3():
-    return (
-        "Keep ≥150 m from residential/commercial/industrial/recreational areas. "
-        "TOAL: well away from uninvolved people and built-up areas."
-    )
-
-def rule_text_specific():
-    return (
-        "Risk-assessed operations per OA; distances per ops manual. TOAL & "
-        "mitigations defined by your approved procedures (e.g., PDRA-01: ≥50 m in "
-        "flight; TOAL may be reduced to 30 m; no overflight of assemblies)."
-    )
-
-# ---------------------------------------------------------------------
-# Eligibility gating (A1/A2/A3) — includes C1→A1 bridge + sub-100 g exemption
+# Regulatory helpers
 # ---------------------------------------------------------------------
 def _lc(x):
     return str(x or "").strip().lower()
@@ -282,7 +243,7 @@ def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -
     eu = _lc(row.get("eu_class_marking", ""))
     uk = _lc(row.get("uk_class_marking", ""))
     mtow = _parse_mtow_g(row)
-
+    is_classed = eu in {"c0","c1","c2","c3","c4"} or uk in {"uk0","uk1","uk2","uk3","uk4"}
     bridge = (jurisdiction.upper() == "UK" and year <= 2027)
 
     # sub-100 g exemption: eligible for A1 & A3; IDs not required
@@ -295,19 +256,17 @@ def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -
         a1 = True
     if uk in {"uk0", "uk1"}:
         a1 = True
-    # C1 -> A1 bridge only in 2026–2027
-    if bridge and year >= 2026 and eu == "c1":
-        a1 = True
-    if bridge and eu in {"c0"}:
+    # C1/C0 -> A1 bridge only in 2026–2027
+    if bridge and year >= 2026 and eu in {"c0","c1"}:
         a1 = True
 
-    # --- A2 (Near people)
+    # --- A2 (Near people)  -> C2/UK2 only; legacy ≤2 kg pre-2026 if UNCLASSED
     a2 = False
     if uk == "uk2" or (bridge and eu == "c2"):
         if mtow is None or mtow <= 4000:
             a2 = True
-    if (jurisdiction.upper() == "UK" and year < 2026 and
-        mtow is not None and mtow <= 2000):
+    if (jurisdiction.upper() == "UK" and year < 2026 and not is_classed
+        and mtow is not None and mtow <= 2000):
         a2 = True
 
     # --- A3 (Far from people)
@@ -319,8 +278,44 @@ def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -
 
     return {"a1": a1, "a2": a2, "a3": a3}
 
+def rid_is_required(row: pd.Series, year: int, jurisdiction: str = "UK") -> bool:
+    """
+    UK view:
+      - ≤2025: not required.
+      - 2026–2027: required for new UK classes UK1/UK2/UK3/UK5/UK6 (bridge C1–C3).
+      - ≥2028: required for all camera drones >100 g.
+    """
+    has_cam = yesish(row.get("has_camera", "yes"))
+    eu = _lc(row.get("eu_class_marking", ""))
+    uk = _lc(row.get("uk_class_marking", ""))
+    mtow = _parse_mtow_g(row) or 0.0
+
+    if year >= 2028 and has_cam and mtow > 100:
+        return True
+
+    if 2026 <= year <= 2027:
+        if uk in {"uk1","uk2","uk3","uk5","uk6"} or eu in {"c1","c2","c3"}:
+            return True
+
+    # ≤2025
+    return False
+
+def rid_pill(row: pd.Series, year: int, rid_ok: bool, jurisdiction: str = "UK") -> str:
+    """
+    Render a single Remote ID pill that reflects requirement + onboard state:
+      - Required & onboard   -> green  "Remote ID: Required (Onboard)"
+      - Required & missing   -> red    "Remote ID: Required"
+      - Not required & onboard -> green "Remote ID: Not required (Onboard)"
+      - Not required & missing -> grey  "Remote ID: Not required"
+    """
+    required = rid_is_required(row, year, jurisdiction)
+    if required:
+        return pill_ok("Remote ID: Required (Onboard)") if rid_ok else pill_need("Remote ID: Required")
+    else:
+        return pill_ok("Remote ID: Not required (Onboard)") if rid_ok else pill_info("Remote ID: Not required")
+
 # ---------------------------------------------------------------------
-# Compute bricks (uses eligibility gates)
+# Compute bricks (uses gates + RID logic)
 # ---------------------------------------------------------------------
 def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "UK"):
     """
@@ -339,6 +334,9 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
     have_gvc  = creds.get("gvc", False)
     have_oa   = creds.get("oa", False)
 
+    mtow = _parse_mtow_g(row) or 0.0
+    sub100 = mtow < 100
+
     # ---------- A1 ----------
     if not elig["a1"]:
         html_a1 = card(
@@ -350,19 +348,20 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
         )
     else:
         pills_a1 = []
-        # Sub-100 g drones don't require IDs; otherwise, require IDs for camera drones
-        if has_cam and not (have_op or (_parse_mtow_g(row) and _parse_mtow_g(row) < 100)):
+        # Sub-100 g: no IDs
+        if has_cam and not sub100 and not have_op:
             pills_a1.append(pill_need("Operator ID: Required"))
         else:
-            pills_a1.append(pill_ok("Operator ID: OK"))
+            pills_a1.append(pill_ok("Operator ID: OK" if not sub100 else "Operator ID: Not required"))
 
-        if has_cam and not (have_fl or (_parse_mtow_g(row) and _parse_mtow_g(row) < 100)):
+        if has_cam and not sub100 and not have_fl:
             pills_a1.append(pill_need("Flyer ID: Required"))
         else:
-            pills_a1.append(pill_ok("Flyer ID: OK"))
+            pills_a1.append(pill_ok("Flyer ID: OK" if not sub100 else "Flyer ID: Not required"))
 
-        pills_a1.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
+        pills_a1.append(rid_pill(row, year, rid_ok, jurisdiction))
         pills_a1.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
+
         a1_all_ok = all(("Required" not in x) for x in pills_a1)
         a1_kind   = "allowed" if a1_all_ok else "possible"
         a1_badge  = badge("Allowed" if a1_kind == "allowed" else "Possible (additional requirements)", a1_kind)
@@ -383,7 +382,7 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
         pills_a2.append(pill_need("Operator ID: Required") if not have_op else pill_ok("Operator ID: OK"))
         pills_a2.append(pill_need("Flyer ID: Required") if not have_fl else pill_ok("Flyer ID: OK"))
         pills_a2.append(pill_need("A2 CofC: Required") if not have_a2 else pill_ok("A2 CofC: OK"))
-        pills_a2.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
+        pills_a2.append(rid_pill(row, year, rid_ok, jurisdiction))
         pills_a2.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
 
         a2_all_ok = all(("Required" not in x) for x in pills_a2)
@@ -405,7 +404,7 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
         pills_a3 = []
         pills_a3.append(pill_need("Operator ID: Required") if not have_op else pill_ok("Operator ID: OK"))
         pills_a3.append(pill_need("Flyer ID: Required") if not have_fl else pill_ok("Flyer ID: OK"))
-        pills_a3.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
+        pills_a3.append(rid_pill(row, year, rid_ok, jurisdiction))
         pills_a3.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
 
         a3_all_ok = all(("Required" not in x) for x in pills_a3)
@@ -420,7 +419,7 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
     pills_sp.append(pill_need("Flyer ID: Required")   if not have_fl else pill_ok("Flyer ID: OK"))
     pills_sp.append(pill_need("GVC: Required")        if not have_gvc else pill_ok("GVC: OK"))
     pills_sp.append(pill_need("OA: Required")         if not have_oa else pill_ok("OA: OK"))
-    pills_sp.append(pill_ok("Remote ID: OK")          if rid_ok else pill_need("Remote ID: Required"))
+    pills_sp.append(rid_pill(row, year, rid_ok, jurisdiction))
     pills_sp.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
 
     sp_all_ok = all(("Required" not in x) for x in pills_sp)
