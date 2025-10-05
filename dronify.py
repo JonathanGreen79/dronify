@@ -1,6 +1,7 @@
-# dronify.py — clickable cards (same tab via anchors), uniform images,
-# Stage2 random per-series image, Stage3 two-row grid with *sidebar detail view*,
-# natural/human sorting by series → marketing_name (Pandas 2.x safe via padded-string keys)
+# dronify.py — robust filtering + same UI as "last good" version
+# - Stage 1: choose segment (horizontal cards)
+# - Stage 2: choose series (random image from models in that series)
+# - Stage 3: two-row model grid OR sidebar-only details when a model is selected
 
 import re
 import random
@@ -24,23 +25,23 @@ def load_data():
     dataset = load_yaml(DATASET_PATH)
     taxonomy = load_yaml(TAXONOMY_PATH)
     df = pd.DataFrame(dataset["data"])
+
     # Ensure columns exist so UI never breaks
-    base_cols = (
-        "image_url", "segment", "series", "class_marking", "weight_band",
-        "marketing_name", "mtom_g_nominal", "eu_class_marking",
-        "uk_class_marking", "remote_id_builtin", "year_released", "notes",
-        "model_key",
-        # extra spec fields (for expanders)
-        "operator_id_required", "spec_url",
-        "sensor", "effective_mp", "aperture", "focal_length_eq",
-        "video_resolutions", "log_profile",
-        "transmission_system", "max_range_km", "controller_compat", "wind_resistance",
-        "battery_type", "battery_capacity_mah", "max_flight_time_min", "charging_power_w",
-        "dim_folded", "dim_unfolded", "diagonal_length",
-    )
-    for col in base_cols:
+    for col in (
+        "image_url", "segment", "series",
+        "class_marking", "weight_band",
+        "marketing_name", "mtom_g_nominal",
+        "eu_class_marking", "uk_class_marking",
+        "remote_id_builtin", "year_released",
+        "notes"
+    ):
         if col not in df.columns:
             df[col] = ""
+
+    # ---- NORMALIZED KEYS (robust matching) ----
+    df["segment_norm"] = df["segment"].astype(str).str.strip().str.lower()
+    df["series_norm"]  = df["series"].astype(str).str.strip().str.lower()
+
     return df, taxonomy
 
 df, taxonomy = load_data()
@@ -59,33 +60,16 @@ series  = qp.get("series")
 model   = qp.get("model")
 
 # ---------- Image resolver (repo images via GitHub Raw) ----------
-# Points to your repo's /images/ folder
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
 def resolve_img(url: str) -> str:
-    """
-    Robust resolver:
-    - absolute URLs -> returned as-is
-    - 'images/foo.jpg' -> converted to RAW_BASE + 'foo.jpg'
-    - bare filenames like 'mini_3.jpg' -> RAW_BASE + 'mini_3.jpg'
-    - other relative paths -> RAW_BASE + that path
-    """
+    url = (url or "").strip()
     if not url:
         return ""
-    u = str(url).strip()
-    if not u:
-        return ""
-    # absolute (http/https/data)
-    if u.startswith(("http://", "https://", "data:")):
-        return u
-    # starts with images/ -> strip and append to RAW_BASE
-    if u.startswith("images/"):
-        return RAW_BASE + u.split("/", 1)[1]
-    # bare filename (no slash): prefix RAW_BASE
-    if "/" not in u:
-        return RAW_BASE + u
-    # other relative path -> still serve from images root
-    return RAW_BASE + u
+    # local repo path
+    if url.startswith("images/"):
+        return RAW_BASE + url.split("/", 1)[1]
+    return url  # already absolute
 
 # Stage 1 hero images
 SEGMENT_HERO = {
@@ -94,25 +78,20 @@ SEGMENT_HERO = {
     "enterprise":resolve_img("images/enterprise.jpg"),
 }
 
-# SAFE sidebar thumbnail resolver (prevents st.image with empty string)
-def sidebar_thumb_url(row, segment_key: str) -> str:
-    """
-    Returns a safe image URL for the sidebar:
-    - model image_url if present
-    - else segment hero image
-    - else empty string (caller should skip st.image)
-    """
-    model_img = resolve_img(str(row.get("image_url", "") or ""))
-    if model_img:
-        return model_img
-    return SEGMENT_HERO.get(segment_key, "") or ""
-
 # ---------- Helpers ----------
 def series_defs_for(segment_key: str):
     seg = next(s for s in taxonomy["segments"] if s["key"] == segment_key)
     # only include series that actually have models
-    return [s for s in seg["series"]
-            if not df[(df["segment"] == segment_key) & (df["series"] == s["key"])].empty]
+    seg_l = str(segment_key).strip().lower()
+    present = set(
+        df.loc[df["segment_norm"] == seg_l, "series_norm"].dropna().unique().tolist()
+    )
+    # keep series whose key exists in df
+    out = []
+    for s in seg["series"]:
+        if s["key"].strip().lower() in present:
+            out.append(s)
+    return out
 
 def pad_digits_for_natural(series: pd.Series, width: int = 6) -> pd.Series:
     """
@@ -125,12 +104,14 @@ def pad_digits_for_natural(series: pd.Series, width: int = 6) -> pd.Series:
 
 def models_for(segment_key: str, series_key: str):
     """
-    Return models in segment+series, sorted *naturally* by:
-      1) series (harmless inside single series)
-      2) marketing_name
-    Uses padded-string helpers (no key=) to be Pandas 2.x safe.
+    Return models in segment+series, sorted naturally by marketing name.
+    Matching is case/whitespace insensitive via *_norm columns.
     """
-    subset = df[(df["segment"] == segment_key) & (df["series"] == series_key)].copy()
+    seg_l = str(segment_key).strip().lower()
+    ser_l = str(series_key).strip().lower()
+
+    subset = df[(df["segment_norm"] == seg_l) & (df["series_norm"] == ser_l)].copy()
+
     subset["series_key"] = pad_digits_for_natural(subset["series"])
     subset["name_key"]   = pad_digits_for_natural(subset["marketing_name"])
     subset = subset.sort_values(
@@ -141,12 +122,11 @@ def models_for(segment_key: str, series_key: str):
     return subset.drop(columns=["series_key", "name_key"])
 
 def random_image_for_series(segment_key: str, series_key: str) -> str:
-    """Pick a random image from models in the given segment+series."""
-    subset = df[
-        (df["segment"] == segment_key)
-        & (df["series"] == series_key)
-    ]
-    # only rows with a non-empty image path after strip
+    """Pick a random image from models in the given segment+series (robust)."""
+    seg_l = str(segment_key).strip().lower()
+    ser_l = str(series_key).strip().lower()
+
+    subset = df[(df["segment_norm"] == seg_l) & (df["series_norm"] == ser_l)]
     subset = subset[subset["image_url"].astype(str).str.strip() != ""]
     if subset.empty:
         return SEGMENT_HERO.get(segment_key, "")
@@ -206,20 +186,36 @@ st.markdown("""
 /* headings */
 .h1 { font-weight: 800; font-size: 1.2rem; color: #1F2937; margin: 0 0 12px 0; }
 
-/* sidebar styling + badges */
-.sidebar-card img { border-radius: 10px; }
-.sidebar-title { font-weight: 800; font-size: 1.05rem; margin-top: .6rem; }
-.sidebar-kv { margin: .15rem 0; color: #374151; font-size: 0.93rem; }
-.sidebar-muted { color: #6B7280; font-size: 0.85rem; }
-.sidebar-back { margin-top: 0.5rem; display: inline-block; text-decoration: none; color: #2563EB; font-weight: 600; }
-.sidebar-back:hover { text-decoration: underline; }
-
-.badge {
-  display:inline-block; border-radius:10px; padding:4px 10px;
-  font-size:0.8rem; margin:2px 6px 6px 0;
+/* sidebar styling */
+.sidebar-card img {
+  border-radius: 10px;
 }
-.chip-yes { background:#d4edda; color:#155724; }
-.chip-no  { background:#f8d7da; color:#721c24; }
+.sidebar-title {
+  font-weight: 800; font-size: 1.05rem; margin-top: .6rem;
+}
+.sidebar-kv {
+  margin: .15rem 0;
+  color: #374151;
+  font-size: 0.93rem;
+}
+.sidebar-muted {
+  color: #6B7280; font-size: 0.85rem;
+}
+.sidebar-back {
+  margin-top: 0.5rem;
+  display: inline-block;
+  text-decoration: none;
+  color: #2563EB;
+  font-weight: 600;
+}
+.sidebar-back:hover { text-decoration: underline; }
+.badge {
+  display:inline-block; padding:3px 8px; border-radius:999px;
+  background:#EEF2FF; color:#3730A3; font-weight:600; font-size:.78rem;
+  margin-right:.35rem;
+}
+.badge-red   { background:#FEE2E2; color:#991B1B; }
+.badge-green { background:#DCFCE7; color:#14532D; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -257,8 +253,11 @@ elif not series:
     items = []
     for s in series_defs_for(segment):
         rnd_img = random_image_for_series(segment, s["key"])
-        items.append(card_link(f"segment={segment}&series={s['key']}",
-                               f"{s['label']}", img_url=rnd_img))
+        items.append(card_link(
+            f"segment={segment}&series={s['key']}",
+            f"{s['label']}",
+            img_url=rnd_img
+        ))
     render_row(f"Choose a series ({seg_label})", items)
 
 else:
@@ -276,71 +275,60 @@ else:
             st.sidebar.markdown(f"**{seg_label} → {ser_label}**")
             # Back link to series grid
             back_qs = f"segment={segment}&series={series}"
-            st.sidebar.markdown(f"<a class='sidebar-back' href='?{back_qs}' target='_self'>← Back to models</a>", unsafe_allow_html=True)
-
-            # Thumbnail (safe)
-            thumb = sidebar_thumb_url(row, segment)
-            if thumb:
-                st.sidebar.image(thumb, use_column_width=True,
-                                 caption=row.get("marketing_name", ""))
-
-            # Compliance badges & operator ID
-            eu = row.get("eu_class_marking", row.get("class_marking", "—")) or "—"
-            uk = row.get("uk_class_marking", row.get("class_marking", "—")) or "—"
             st.sidebar.markdown(
-                f"<div><span class='badge' style='background:#e3f2fd;color:#0d47a1;'>EU Class: {eu}</span>"
-                f"<span class='badge' style='background:#fff3e0;color:#e65100;'>UK Class: {uk}</span></div>",
+                f"<a class='sidebar-back' href='?{back_qs}' target='_self'>← Back to models</a>",
                 unsafe_allow_html=True
             )
 
-            opid = str(row.get("operator_id_required", "") or row.get("remote_id_builtin","")).lower()
-            if opid in ("yes", "true"):
-                st.sidebar.markdown("<div class='badge chip-yes'>Operator ID Required</div>", unsafe_allow_html=True)
-            elif opid in ("no", "false"):
-                st.sidebar.markdown("<div class='badge chip-no'>No Operator ID Required</div>", unsafe_allow_html=True)
+            # Thumbnail (guard if empty URL)
+            img_url = resolve_img(row.get("image_url", ""))
+            if img_url:
+                st.sidebar.image(img_url, use_container_width=True, caption=row.get("marketing_name", ""))
 
-            # Quick facts
-            st.sidebar.markdown("### 🧾 Quick Facts")
-            st.sidebar.markdown(f"**Year Released:** {row.get('year_released', '—') or '—'}")
-            st.sidebar.markdown(f"**Segment:** {str(row.get('segment','—')).capitalize()}")
-            st.sidebar.markdown(f"**Series:** {str(row.get('series','—')).capitalize()}")
-            if row.get("spec_url"):
-                st.sidebar.markdown(f"[📄 Official Specs Page]({row['spec_url']})")
+            # Badges: EU/UK class + Operator ID hint (if you added it in YAML)
+            eu = (row.get("eu_class_marking") or row.get("class_marking") or "unknown") or "unknown"
+            uk = (row.get("uk_class_marking") or row.get("class_marking") or "unknown") or "unknown"
+            op = str(row.get("operator_id_required", "")).strip().lower()
+            if op in ("yes", "true", "1"):
+                op_badge = "<span class='badge badge-red'>Operator ID: Required</span>"
+            elif op in ("no", "false", "0"):
+                op_badge = "<span class='badge badge-green'>Operator ID: Not required</span>"
+            else:
+                op_badge = "<span class='badge'>Operator ID: Unknown</span>"
 
-            # ---------- Expandable sections ----------
-            st.markdown(f"### {row.get('marketing_name','')}")
-            with st.expander("📸 Camera"):
-                st.markdown(f"**Sensor:** {row.get('sensor','—') or '—'}")
-                st.markdown(f"**Effective Megapixels:** {row.get('effective_mp','—') or '—'}")
-                st.markdown(f"**Aperture:** {row.get('aperture','—') or '—'}")
-                st.markdown(f"**Focal Length (eq):** {row.get('focal_length_eq','—') or '—'}")
-                st.markdown(f"**Video Resolutions:** {row.get('video_resolutions','—') or '—'}")
-                st.markdown(f"**Log Profile:** {row.get('log_profile','—') or '—'}")
+            st.sidebar.markdown(
+                f"<div style='margin:.4rem 0 .2rem 0'>"
+                f"<span class='badge'>EU: {eu}</span>"
+                f"<span class='badge'>UK: {uk}</span>"
+                f"{op_badge}"
+                f"</div>",
+                unsafe_allow_html=True
+            )
 
-            with st.expander("📡 Transmission"):
-                st.markdown(f"**System:** {row.get('transmission_system','—') or '—'}")
-                st.markdown(f"**Max Range (CE):** {row.get('max_range_km','—') or '—'}")
-                st.markdown(f"**Controllers:** {row.get('controller_compat','—') or '—'}")
-                st.markdown(f"**Wind Resistance:** {row.get('wind_resistance','—') or '—'}")
+            # Key specs
+            st.sidebar.markdown("<div class='sidebar-title'>Key specs</div>", unsafe_allow_html=True)
+            st.sidebar.markdown(
+                f"""
+                <div class='sidebar-kv'><b>Model</b>: {row.get('marketing_name', '—')}</div>
+                <div class='sidebar-kv'><b>MTOW</b>: {row.get('mtom_g_nominal', '—')} g</div>
+                <div class='sidebar-kv'><b>Weight band</b>: {row.get('weight_band', '—')}</div>
+                <div class='sidebar-kv'><b>EU class</b>: {eu}</div>
+                <div class='sidebar-kv'><b>UK class</b>: {uk}</div>
+                <div class='sidebar-kv'><b>Remote ID</b>: {row.get('remote_id_builtin', 'unknown')}</div>
+                <div class='sidebar-kv'><b>Released</b>: {row.get('year_released', '—')}</div>
+                """,
+                unsafe_allow_html=True
+            )
 
-            with st.expander("🔋 Battery & Flight"):
-                st.markdown(f"**Battery Type:** {row.get('battery_type','—') or '—'}")
-                st.markdown(f"**Capacity:** {row.get('battery_capacity_mah','—') or '—'}")
-                st.markdown(f"**Flight Time:** {row.get('max_flight_time_min','—') or '—'} min")
-                st.markdown(f"**Charge Power:** {row.get('charging_power_w','—') or '—'} W")
-
-            with st.expander("📏 Dimensions"):
-                st.markdown(f"**Folded:** {row.get('dim_folded','—') or '—'}")
-                st.markdown(f"**Unfolded:** {row.get('dim_unfolded','—') or '—'}")
-                st.markdown(f"**Diagonal:** {row.get('diagonal_length','—') or '—'}")
-
-            with st.expander("🗒 Notes"):
-                st.markdown(f"{row.get('notes','—') or '—'}")
+            # Notes (optional)
+            notes = str(row.get("notes", "")).strip()
+            if notes:
+                st.sidebar.markdown("<div class='sidebar-title'>Notes</div>", unsafe_allow_html=True)
+                st.sidebar.markdown(f"<div class='sidebar-muted'>{notes}</div>", unsafe_allow_html=True)
 
             # Keep main body intentionally blank for now
             st.write("")
             st.write("")
-
         else:
             # If invalid model key, just fall back to grid
             model = None
@@ -350,14 +338,24 @@ else:
         models = models_for(segment, series)
         items = []
         for _, r in models.iterrows():
-            subbits = []
-            cm = r.get("class_marking", "unknown")
-            if isinstance(cm, str) and cm:
-                subbits.append(f"Class: {cm}")
+            # Subline: EU & UK class if present, else generic class
+            eu_c = (r.get("eu_class_marking") or r.get("class_marking") or "").strip()
+            uk_c = (r.get("uk_class_marking") or r.get("class_marking") or "").strip()
+            parts = []
+            if eu_c or uk_c:
+                eu_show = eu_c if eu_c else "—"
+                uk_show = uk_c if uk_c else "—"
+                parts.append(f"Class: EU {eu_show} • UK {uk_show}")
+            else:
+                cm = r.get("class_marking", "").strip()
+                if cm:
+                    parts.append(f"Class: {cm}")
+
             wb = r.get("weight_band", "")
             if isinstance(wb, str) and wb:
-                subbits.append(f"Weight: {wb}")
-            sub = " • ".join(subbits)
+                parts.append(f"Weight: {wb}")
+            sub = " • ".join(parts)
+
             items.append(
                 card_link(
                     f"segment={segment}&series={series}&model={r['model_key']}",
