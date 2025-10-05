@@ -58,19 +58,37 @@ RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/image
 
 def resolve_img(url: str) -> str:
     """
-    - Absolute URLs: return as-is
-    - 'images/...' paths: convert to GitHub raw
-    - Bare filenames: treat as 'images/<filename>'
+    Robustly resolve any image reference to a valid GitHub raw URL:
+    - Absolute http(s)/data URLs are returned as-is
+    - Any local-ish reference (with or without 'images/') is normalised to RAW_BASE + <filename>
+    Handles mixed case, leading/trailing slashes, and duplicate 'images/' segments.
     """
     url = (url or "").strip()
     if not url:
         return ""
+
     low = url.lower()
     if low.startswith("http://") or low.startswith("https://") or low.startswith("data:"):
         return url
-    if low.startswith("images/"):
-        return RAW_BASE + url.split("/", 1)[1]
-    return RAW_BASE + url.lstrip("/")
+
+    # Normalise local-ish path
+    path = url.replace("\\", "/").strip()
+
+    # Remove leading slashes/spaces
+    while path.startswith("/"):
+        path = path[1:]
+
+    # Collapse any number/case of 'images/' at the front to a single filename
+    # e.g. 'images/mini.jpg', 'Images/mini.jpg', '/images/mini.jpg' -> 'mini.jpg'
+    while path.lower().startswith("images/"):
+        path = path.split("/", 1)[1] if "/" in path else ""
+
+    # If the path is still empty, bail
+    if not path:
+        return ""
+
+    return RAW_BASE + path
+
 
 # Stage 1 hero images
 SEGMENT_HERO = {
@@ -300,3 +318,4 @@ else:
                 )
             )
         render_two_rows(f"Choose a drone ({seg_label} → {ser_label})", items)
+
