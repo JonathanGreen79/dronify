@@ -1,21 +1,19 @@
-# dronify.py — clickable cards (same tab), uniform images,
-# Stage2 random per-series image, Stage3 two-row grid with sidebar,
-# plus MAIN BODY 3-column compliance comparator (Current / 2026 / 2028)
-# and a robust image resolver that can’t break.
-
+# dronify.py — “last-good” navigation + image fixer + sidebar + 3-column compliance matrix
 import re
 import random
-import streamlit as st
-import pandas as pd
-import yaml
 from pathlib import Path
+
+import pandas as pd
+import streamlit as st
+import yaml
 
 st.set_page_config(page_title="Dronify", layout="wide")
 
 DATASET_PATH = Path("dji_drones_v3.yaml")
 TAXONOMY_PATH = Path("taxonomy.yaml")
 
-# ---------- Load ----------
+# ------------------------------- Loaders -------------------------------
+
 def load_yaml(path: Path):
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -25,21 +23,19 @@ def load_data():
     dataset = load_yaml(DATASET_PATH)
     taxonomy = load_yaml(TAXONOMY_PATH)
     df = pd.DataFrame(dataset["data"])
-    # Ensure columns exist so UI never breaks
+
+    # Ensure all columns exist to avoid key errors
     for col in (
-        "image_url", "segment", "series",
-        "class_marking", "weight_band",
-        "marketing_name", "mtom_g_nominal",
+        "image_url", "segment", "series", "marketing_name", "model_key",
+        "mtom_g_nominal",
         "eu_class_marking", "uk_class_marking",
-        "remote_id_builtin", "year_released",
-        "notes", "operator_id_required",
-        "has_camera", "geo_awareness",
-        "model_key",
+        "has_camera", "geo_awareness", "remote_id_builtin", "operator_id_required",
+        "year_released", "notes"
     ):
         if col not in df.columns:
             df[col] = ""
 
-    # normalized for robust matching
+    # Normalized helpers for robust filtering
     df["segment_norm"] = df["segment"].astype(str).str.strip().str.lower()
     df["series_norm"]  = df["series"].astype(str).str.strip().str.lower()
 
@@ -47,92 +43,71 @@ def load_data():
 
 df, taxonomy = load_data()
 
-# ---------- Query params ----------
+# ------------------------------- Query params -------------------------------
+
 def get_qp():
+    # Streamlit ≥1.32
     try:
-        return dict(st.query_params)  # Streamlit ≥1.32
+        return dict(st.query_params)
     except Exception:
-        return {k: (v[0] if isinstance(v, list) else v)
-                for k, v in st.experimental_get_query_params().items()}
+        qp = st.experimental_get_query_params()
+        return {k: (v[0] if isinstance(v, list) else v) for k, v in qp.items()}
 
 qp = get_qp()
 segment = qp.get("segment")
 series  = qp.get("series")
 model   = qp.get("model")
 
-# ---------- Image resolver (robust) ----------
-RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
+# ------------------------------- Image resolving -------------------------------
+
+RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/"
 
 def resolve_img(url: str) -> str:
     """
-    Robustly resolve any image reference to a valid GitHub raw URL:
-    - Absolute http(s)/data URLs are returned as-is.
-    - Any local-ish reference (with or without 'images/') is normalised to RAW_BASE + <filename>.
-    Handles mixed case, duplicate "images/", leading slashes and backslashes.
+    Make image URLs robust:
+    - absolute http(s): return as-is
+    - if startswith 'images/': prepend RAW_BASE
+    - bare filename like 'mini-5-pro.jpg' => 'images/<filename>'
+    - already-raw GitHub links: pass through
     """
-    url = (url or "").strip()
-    if not url:
+    u = (url or "").strip()
+    if not u:
         return ""
-
-    low = url.lower()
+    low = u.lower()
     if low.startswith("http://") or low.startswith("https://") or low.startswith("data:"):
-        return url
+        return u
+    if low.startswith("images/"):
+        return RAW_BASE + u
+    # bare filename or subpath -> assume under /images
+    return RAW_BASE + "images/" + u.lstrip("/")
 
-    # normalise local paths
-    path = url.replace("\\", "/").strip()
-    while path.startswith("/"):
-        path = path[1:]
-    # strip repeated leading images/
-    while path.lower().startswith("images/"):
-        path = path.split("/", 1)[1] if "/" in path else ""
-
-    if not path:
-        return ""
-
-    return RAW_BASE + path
-
-# Stage 1 hero images
+# Hero images (stage 1)
 SEGMENT_HERO = {
     "consumer": resolve_img("images/consumer.jpg"),
     "pro":       resolve_img("images/professional.jpg"),
     "enterprise":resolve_img("images/enterprise.jpg"),
 }
 
-# Flag icons
-EU_FLAG = resolve_img("images/eu.png")
-UK_FLAG = resolve_img("images/uk.png")
+# ------------------------------- Helpers -------------------------------
 
-# ---------- Helpers ----------
 def series_defs_for(segment_key: str):
     seg = next(s for s in taxonomy["segments"] if s["key"] == segment_key)
-    seg_l = str(segment_key).strip().lower()
     present = set(
-        df.loc[df["segment_norm"] == seg_l, "series_norm"].dropna().unique().tolist()
+        df.loc[df["segment_norm"] == segment_key, "series_norm"].dropna().unique().tolist()
     )
     out = []
     for s in seg["series"]:
-        if s["key"].strip().lower() in present:
+        if s["key"] in present:
             out.append(s)
     return out
 
-def pad_digits_for_natural(series: pd.Series, width: int = 6) -> pd.Series:
-    """
-    Convert strings to lowercase and pad every number with leading zeros.
-    'Mini 2 SE' -> 'mini 000002 se' (so lexicographic sorts naturally).
-    """
-    s = series.astype(str).str.lower()
+def pad_digits_for_natural(s: pd.Series, width: int = 6) -> pd.Series:
+    # Lowercase + pad digits => gives natural sort via lexicographic
+    s = s.astype(str).str.lower()
     return s.str.replace(r"\d+", lambda m: f"{int(m.group(0)):0{width}d}", regex=True)
 
 def models_for(segment_key: str, series_key: str):
-    """
-    Return models in segment+series, sorted *naturally* by:
-      1) series (harmless inside single series)
-      2) marketing_name
-    Uses padded-string helpers (no key=) to be Pandas 2.x safe.
-    """
-    seg_l = str(segment_key).strip().lower()
-    ser_l = str(series_key).strip().lower()
-    subset = df[(df["segment_norm"] == seg_l) & (df["series_norm"] == ser_l)].copy()
+    subset = df[(df["segment_norm"] == segment_key) & (df["series_norm"] == series_key)].copy()
     subset["series_key"] = pad_digits_for_natural(subset["series"])
     subset["name_key"]   = pad_digits_for_natural(subset["marketing_name"])
     subset = subset.sort_values(
@@ -143,27 +118,22 @@ def models_for(segment_key: str, series_key: str):
     return subset.drop(columns=["series_key", "name_key"])
 
 def random_image_for_series(segment_key: str, series_key: str) -> str:
-    """Pick a random image from models in the given segment+series."""
-    seg_l = str(segment_key).strip().lower()
-    ser_l = str(series_key).strip().lower()
-
-    subset = df[(df["segment_norm"] == seg_l) & (df["series_norm"] == ser_l)]
+    subset = df[(df["segment_norm"] == segment_key) & (df["series_norm"] == series_key)]
     subset = subset[subset["image_url"].astype(str).str.strip() != ""]
     if subset.empty:
         return SEGMENT_HERO.get(segment_key, "")
     raw = str(subset.sample(1, random_state=None)["image_url"].iloc[0])
     return resolve_img(raw)
 
-# ---------- Styles ----------
+# ------------------------------- Styles -------------------------------
+
 st.markdown("""
 <style>
-/* Headings spacing */
 .block-container { padding-top: 1.1rem; }
 
-/* shared card look */
+/* ====== Cards ====== */
 .card {
-  width: 260px; height: 240px;
-  border: 1px solid #E5E7EB; border-radius: 14px;
+  width: 260px; height: 240px; border: 1px solid #E5E7EB; border-radius: 14px;
   background: #fff; text-decoration: none !important; color: #111827 !important;
   display: block; padding: 12px;
   transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
@@ -173,63 +143,56 @@ st.markdown("""
 
 .img {
   width: 100%; height: 150px; border-radius: 10px; background: #F3F4F6;
-  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; display:flex; align-items:center; justify-content:center;
 }
-.img > img { width: 100%; height: 100%; object-fit: cover; }  /* same-size look */
+.img > img { width: 100%; height: 100%; object-fit: cover; }
 
 .title { margin-top: 10px; text-align: center; font-weight: 700; font-size: 0.98rem; }
-.sub    { margin-top: 4px;  text-align: center; font-size: .8rem; color: #6B7280; }
+.sub { margin-top: 4px; text-align: center; font-size: .8rem; color: #6B7280; }
 
-/* horizontal strip (stage 1 & 2) */
-.strip {
-  display: flex; flex-wrap: nowrap; gap: 14px; overflow-x: auto; padding: 8px 2px; margin: 0;
-}
+.strip { display:flex; flex-wrap:nowrap; gap:14px; overflow-x:auto; padding:8px 2px; margin:0; }
+.strip2 { display:grid; grid-auto-flow:column; grid-auto-columns:260px; grid-template-rows:repeat(2,1fr); gap:14px; overflow-x:auto; padding:8px 2px; margin:0; }
 
-/* stage 3: two-row horizontal grid */
-.strip2 {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 260px;     /* card width */
-  grid-template-rows: repeat(2, 1fr);
-  gap: 14px;
-  overflow-x: auto;
-  padding: 8px 2px; margin: 0;
-}
+.h1 { font-weight:800; font-size:1.2rem; color:#1F2937; margin:0 0 12px 0; }
 
-/* headings */
-.h1 { font-weight: 800; font-size: 1.2rem; color: #1F2937; margin: 0 0 12px 0; }
-
-/* sidebar styling */
-.sidebar-title { font-weight: 800; font-size: 1.05rem; margin-top: .6rem; }
-.sidebar-kv { margin: .15rem 0; color: #374151; font-size: 0.93rem; }
-.sidebar-muted { color: #6B7280; font-size: 0.85rem; }
-.sidebar-back { margin-top: 0.5rem; display: inline-block; text-decoration: none; color: #2563EB; font-weight: 600; }
+/* ====== Sidebar badges and icons ====== */
+.sidebar-title { font-weight:800; font-size:1.05rem; margin-top:.6rem; }
+.sidebar-kv { margin:.18rem 0; color:#374151; font-size:.95rem; }
+.sidebar-muted { color:#6B7280; font-size:.85rem; }
+.sidebar-back { margin-top:0.5rem; display:inline-block; text-decoration:none; color:#2563EB; font-weight:600; }
 .sidebar-back:hover { text-decoration: underline; }
+.badge { display:inline-block; padding:6px 10px; border-radius:999px; background:#EEF2FF; color:#3730A3; font-weight:600; font-size:.82rem; margin-right:.35rem; }
+.badge-red { background:#FEE2E2; color:#991B1B; }
+.badge-green { background:#DCFCE7; color:#14532D; }
+.badge-grey { background:#F3F4F6; color:#6B7280; }
+.flag-row { display:flex; align-items:center; gap:10px; margin:.25rem 0; }
+.flag-row img { width:20px; height:20px; border-radius:3px; object-fit:cover; }
 
-/* pills/badges */
-.badge { display:inline-block; padding:4px 8px; border-radius:999px; font-weight:600; font-size:.84rem; }
-.badge-ok   { background:#DCFCE7; color:#14532D; }
-.badge-warn { background:#FEF9C3; color:#854D0E; }
-.badge-bad  { background:#FEE2E2; color:#991B1B; }
-.badge-grey { background:#F3F4F6; color:#374151; }
+/* ====== Compliance columns ====== */
+.matrix h3 { margin:0 0 .7rem 0; font-size:1.2rem; }
+.rowline { display:flex; align-items:center; gap:12px; margin:.25rem 0; }
+.rowline .label { width:120px; color:#374151; }
+.pill { display:inline-block; padding:6px 10px; border-radius:999px; font-weight:600; font-size:.82rem; }
+.pill-ok { background:#DCFCE7; color:#14532D; }
+.pill-warn { background:#FEF3C7; color:#92400E; }
+.pill-attn { background:#FEE2E2; color:#991B1B; }
+.pill-info { background:#DBEAFE; color:#1E3A8A; }
+.pill-na { background:#F3F4F6; color:#6B7280; }
 
-/* small text helper */
-.small { font-size:.88rem; color:#374151; }
+.small { font-size:.82rem; color:#6B7280; }
 
-/* flag rows */
-.flag-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
-.flag-row img { width:20px; height:20px; object-fit:cover; border-radius:3px; }
+/* icons (emoji) alignment tweak */
+.icon { width:1.2rem; display:inline-block; text-align:center; }
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- Card (anchor in same tab) ----------
+# ------------------------------- Card builders -------------------------------
+
 def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
     img = f"<div class='img'><img src='{img_url}' alt=''/></div>" if img_url else "<div class='img'></div>"
     sub_html = f"<div class='sub'>{sub}</div>" if sub else ""
-    return (
-        f"<a class='card' href='?{qs}' target='_self' rel='noopener'>"
-        f"{img}<div class='title'>{title}</div>{sub_html}</a>"
-    )
+    return (f"<a class='card' href='?{qs}' target='_self' rel='noopener'>"
+            f"{img}<div class='title'>{title}</div>{sub_html}</a>")
 
 def render_row(title: str, items: list[str]):
     st.markdown(f"<div class='h1'>{title}</div><div class='strip'>{''.join(items)}</div>", unsafe_allow_html=True)
@@ -237,132 +200,115 @@ def render_row(title: str, items: list[str]):
 def render_two_rows(title: str, items: list[str]):
     st.markdown(f"<div class='h1'>{title}</div><div class='strip2'>{''.join(items)}</div>", unsafe_allow_html=True)
 
-# ---------- Compliance panels (main body) ----------
-def _pill(text: str, kind: str = "grey") -> str:
-    cls = {
-        "ok": "badge badge-ok",
-        "warn": "badge badge-warn",
-        "bad": "badge badge-bad",
-        "grey": "badge badge-grey",
-    }.get(kind, "badge badge-grey")
-    return f"<span class='{cls}'>{text}</span>"
+# ------------------------------- Compliance logic helpers -------------------------------
 
-def _line(label: str, value_html: str) -> str:
-    return (
-        "<div style='margin:.25rem 0 .35rem 0'>"
-        f"<span style='display:inline-block;width:120px;color:#6B7280'>{label}</span>"
-        f"{value_html}</div>"
-    )
+def coalesce(*vals, default=""):
+    for v in vals:
+        s = str(v or "").strip()
+        if s:
+            return s
+    return default
 
-def _where_row(a1: str, a2: str, a3: str, spec: str) -> str:
-    return (
-        "<div style='margin:.35rem 0 .5rem 0'>"
-        f"{_line('A1', _pill(a1))}"
-        f"{_line('A2', _pill(a2))}"
-        f"{_line('A3', _pill(a3))}"
-        f"{_line('Specific', _pill(spec, 'warn'))}"
-        "</div>"
-    )
+def is_c0(eu, uk, weight):
+    return (eu.upper() == "C0") or (weight and float(str(weight) or "0") <= 250)
 
-def _yesno_badge(needed: bool, unknown=False, text_yes="Required", text_no="Not required"):
-    if unknown:
-        return _pill("Unknown", "grey")
-    return _pill(text_yes, "bad") if needed else _pill(text_no, "ok")
+def a2_applicable(eu_cls: str) -> bool:
+    """
+    Very simplified: A2 only meaningful for C2 (and sometimes C1 transitional variants),
+    but for our purpose:
+      - C0 / Legacy => not applicable
+      - C1 => effectively A1/A3 routes; we’ll grey A2
+      - C2 => applicable (with A2 CofC)
+      - C3/C4 => A2 not applicable (A3 / Specific)
+    """
+    e = eu_cls.upper()
+    if e in ("", "UNKNOWN", "LEGACY"):
+        return False
+    if e == "C0":
+        return False
+    if e == "C1":
+        return False
+    if e == "C2":
+        return True
+    return False  # C3/C4 etc.
 
-def render_compliance_panels(row: pd.Series):
-    # Parse values
-    def to_int(x):
-        try:
-            return int(x)
-        except Exception:
-            return None
+def pill(text, kind="ok"):
+    klass = {
+        "ok": "pill-ok",
+        "warn": "pill-warn",
+        "attn": "pill-attn",
+        "info": "pill-info",
+        "na": "pill-na",
+    }.get(kind, "pill-ok")
+    return f"<span class='pill {klass}'>{text}</span>"
 
-    weight = to_int(row.get("mtom_g_nominal", None))
-    has_cam = str(row.get("has_camera", "")).strip().lower() == "yes"
-    rid = (row.get("remote_id_builtin", "") or "unknown").strip().lower()
-    geo = (row.get("geo_awareness", "") or "unknown").strip().lower()
+def line(label, badge_html):
+    return f"<div class='rowline'><div class='label'>{label}</div>{badge_html}</div>"
 
-    # Helper: simple “where can I fly” summaries
-    def where_current():
-        if weight is not None and weight < 250 and has_cam:
-            return _where_row("Yes (close)", "No", "Yes (far)", "If needed")
-        elif weight is not None and weight <= 900:
-            return _where_row("No", "Yes (with proof)", "Yes", "If needed")
-        else:
-            return _where_row("No", "No", "Yes (far)", "Likely")
+def compliance_column(title: str, eu_cls: str, uk_cls: str, weight_g, *, year_tag: str):
+    """
+    Returns HTML for one compliance column (Current / 2026 / 2028 planned).
+    Super-simplified policy model (we learned together):
+      - A1 Yes (close to people) for C0/≤250g. C1 often A1 transitional in practice; we keep “Yes (close)”.
+      - A2 shows grey “N/A for this class” except for C2 (shows “Yes – with A2 CofC”).
+      - A3 always “Yes (far)”.
+      - Specific always “If needed”.
+      - Operator ID, Flyer ID, Remote ID, Geo awareness:
+          * We show them under each column to reinforce the changing timeline;
+            values are “Required” for these examples; geo is required by 2026+.
+    """
+    e = (eu_cls or "").strip().upper()
+    uk = (uk_cls or "").strip().upper()
+    w  = float(str(weight_g or "0") or "0")
 
-    def where_2026():
-        if weight and weight < 250:
-            return _where_row("Yes (close)", "No", "Yes (far)", "If needed")
-        elif weight and weight <= 900:
-            return _where_row("No", "Yes (with proof)", "Yes", "If needed")
-        else:
-            return _where_row("No", "No", "Yes (far)", "Likely")
+    # A1
+    if is_c0(e, uk, w):
+        a1 = pill("Yes (close)", "ok")
+    else:
+        # keep simple/optimistic view for modern CE classes (C1)
+        a1 = pill("Yes (close)", "ok")
 
-    def where_2028():
-        if weight and weight < 250:
-            return _where_row("Yes (close)", "No", "Yes (far)", "If needed")
-        elif weight and weight <= 900:
-            return _where_row("No", "Yes (with proof)", "Yes", "If needed")
-        else:
-            return _where_row("No", "No", "Yes (far)", "Likely")
+    # A2
+    if a2_applicable(e):
+        a2 = pill("Yes – with A2 CofC", "info")
+    else:
+        a2 = pill("N/A for this class", "na")
 
-    # Flyer ID rules
-    flyer_now   = has_cam or (weight is not None and weight >= 250)  # pragmatic: camera → yes
-    flyer_26_28 = has_cam and (weight is not None and weight >= 100)
+    # A3
+    a3 = pill("Yes (far)", "info")
 
-    # Operator ID rules (camera generally => yes)
-    oper_now = has_cam
-    oper_26  = has_cam
-    oper_28  = has_cam
+    # Specific
+    sp = pill("If needed", "warn")
 
-    # Remote ID & Geo awareness rules per era
-    rid_now  = (rid == "yes")  # some newer models yes; else unknown
-    rid_26   = (rid == "yes") or (has_cam and (weight is not None and weight >= 100))
-    rid_28   = has_cam and (weight is not None and weight >= 100)
+    # Registration/ID expectations (we present consistently for clarity)
+    opid = pill("Required", "attn")
+    flyid = pill("Required", "attn")
 
-    geo_now  = (geo == "yes")  # if firmware supports
-    geo_26   = (geo == "yes")  # UK1–3 need it; keep as product capability gate
-    geo_28   = has_cam and (weight is not None and weight >= 100)
+    # Remote ID & Geo awareness — show as required from 2026+, optional/unknown now
+    if year_tag == "current":
+        rid = pill("Required", "attn")  # many models now have it; still show red to prompt check
+        geo = pill("Required", "attn")  # geo db / NFZ warnings expected on modern models
+    else:
+        rid = pill("Required", "attn")
+        geo = pill("Required", "attn")
 
-    c1, c2, c3 = st.columns(3)
+    html = []
+    html.append(f"<div class='matrix'><h3>{title}</h3>")
+    html.append(line("A1", a1))
+    html.append(line("A2", a2))
+    html.append(line("A3", a3))
+    html.append(line("Specific", sp))
+    html.append(line("Operator ID", opid))
+    html.append(line("Flyer ID", flyid))
+    html.append(line("Remote ID", rid))
+    html.append(line("Geo-awareness", geo))
+    html.append("</div>")
+    return "\n".join(html)
 
-    with c1:
-        st.markdown("### Current", unsafe_allow_html=True)
-        st.markdown(where_current(), unsafe_allow_html=True)
-        st.markdown(
-            _line("Operator ID", _yesno_badge(oper_now)) +
-            _line("Flyer ID",     _yesno_badge(flyer_now)) +
-            _line("Remote ID",    _yesno_badge(rid_now, unknown=(rid == "unknown"))) +
-            _line("Geo-awareness",_yesno_badge(geo_now, unknown=(geo == "unknown"))),
-            unsafe_allow_html=True
-        )
+# ------------------------------- UI flow -------------------------------
 
-    with c2:
-        st.markdown("### 2026", unsafe_allow_html=True)
-        st.markdown(where_2026(), unsafe_allow_html=True)
-        st.markdown(
-            _line("Operator ID", _yesno_badge(oper_26)) +
-            _line("Flyer ID",     _yesno_badge(flyer_26_28)) +
-            _line("Remote ID",    _yesno_badge(rid_26)) +
-            _line("Geo-awareness",_yesno_badge(geo_26, unknown=(geo == "unknown"))),
-            unsafe_allow_html=True
-        )
-
-    with c3:
-        st.markdown("### 2028 (planned)", unsafe_allow_html=True)
-        st.markdown(where_2028(), unsafe_allow_html=True)
-        st.markdown(
-            _line("Operator ID", _yesno_badge(oper_28)) +
-            _line("Flyer ID",     _yesno_badge(flyer_26_28)) +
-            _line("Remote ID",    _yesno_badge(rid_28)) +
-            _line("Geo-awareness",_yesno_badge(geo_28)),
-            unsafe_allow_html=True
-        )
-
-# ---------- Screens ----------
 if not segment:
-    # Stage 1 — choose group (horizontal)
+    # Stage 1 — categories
     items = []
     for seg in taxonomy["segments"]:
         img = SEGMENT_HERO.get(seg["key"], "")
@@ -370,21 +316,20 @@ if not segment:
     render_row("Choose your drone category", items)
 
 elif not series:
-    # Stage 2 — choose series (horizontal, random image from that series only)
+    # Stage 2 — series (random image from that series)
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     items = []
     for s in series_defs_for(segment):
         rnd_img = random_image_for_series(segment, s["key"])
-        items.append(card_link(f"segment={segment}&series={s['key']}",
-                               f"{s['label']}", img_url=rnd_img))
+        items.append(card_link(f"segment={segment}&series={s['key']}", s["label"], img_url=rnd_img))
     render_row(f"Choose a series ({seg_label})", items)
 
 else:
-    # Stage 3
+    # Stage 3 — models grid + sidebar details (or compliance columns if a model is selected)
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     ser_label = next(s["label"] for s in series_defs_for(segment) if s["key"] == series)
 
-    # If a model is selected, show sidebar + MAIN BODY 3 columns
+    # If a model is selected, show sidebar details + compliance columns in main body
     if model:
         sel = df[df["model_key"] == model]
         if not sel.empty:
@@ -397,65 +342,91 @@ else:
                 unsafe_allow_html=True
             )
 
-            # Thumbnail + caption
+            # Thumbnail
             img_url = resolve_img(row.get("image_url", ""))
             if img_url:
                 st.sidebar.image(img_url, use_container_width=True, caption=row.get("marketing_name", ""))
 
-            # EU/UK flags on separate lines
-            eu = (row.get("eu_class_marking") or "unknown")
-            uk = (row.get("uk_class_marking") or "unknown")
+            # EU/UK flags and class badges (each on its own line with flag)
+            eu_cls = coalesce(row.get("eu_class_marking"), row.get("class_marking"), default="unknown")
+            uk_cls = coalesce(row.get("uk_class_marking"), row.get("class_marking"), default="unknown")
             st.sidebar.markdown(
-                f"<div class='flag-row'><img src='{EU_FLAG}' alt='EU flag'/> <span>EU: <b>{eu}</b></span></div>",
+                f"<div class='flag-row'><img src='{resolve_img('images/eu.png')}' alt='EU'/>"
+                f"<span>EU: <b>{eu_cls}</b></span></div>",
                 unsafe_allow_html=True
             )
             st.sidebar.markdown(
-                f"<div class='flag-row'><img src='{UK_FLAG}' alt='UK flag'/> <span>UK: <b>{uk}</b></span></div>",
+                f"<div class='flag-row'><img src='{resolve_img('images/uk.png')}' alt='UK'/>"
+                f"<span>UK: <b>{uk_cls}</b></span></div>",
                 unsafe_allow_html=True
             )
 
-            # Key specs (kept lean)
+            # Operator ID / Flyer ID badges
+            op = str(row.get("operator_id_required", "")).strip().lower()
+            if op in ("yes", "true", "1"):
+                op_badge = "<span class='badge badge-red'>Operator ID: Required</span>"
+            elif op in ("no", "false", "0"):
+                op_badge = "<span class='badge badge-green'>Operator ID: Not required</span>"
+            else:
+                op_badge = "<span class='badge'>Operator ID: Unknown</span>"
+            st.sidebar.markdown(op_badge, unsafe_allow_html=True)
+
+            st.sidebar.markdown("<span class='badge'>Flyer ID</span>", unsafe_allow_html=True)
+
+            # Key specs with icons (emoji)
             st.sidebar.markdown("<div class='sidebar-title'>Key specs</div>", unsafe_allow_html=True)
 
-            mtow_txt = "—"
-            try:
-                mtow_val = int(row.get("mtom_g_nominal", "") or 0)
-                if mtow_val > 0:
-                    mtow_txt = f"{mtow_val} g"
-            except Exception:
-                pass
+            model_name = row.get("marketing_name", "—")
+            st.sidebar.markdown(f"<div class='sidebar-kv'><span class='icon'>🧷</span><b>Model</b> : {model_name}</div>", unsafe_allow_html=True)
 
-            st.sidebar.markdown(
-                _line("Model", f"<span class='small'>{row.get('marketing_name','')}</span>") +
-                _line("MTOW", f"<span class='small'>{mtow_txt}</span>") +
-                _line("Remote ID", f"<span class='small'>{(row.get('remote_id_builtin') or 'unknown')}</span>") +
-                _line("Geo-awareness", f"<span class='small'>{(row.get('geo_awareness') or 'unknown')}</span>") +
-                _line("Released", f"<span class='small'>{row.get('year_released','')}</span>"),
+            mtow = row.get("mtom_g_nominal", "")
+            mtow_str = f"{mtow} g" if str(mtow).strip() else "—"
+            st.sidebar.markdown(f"<div class='sidebar-kv'><span class='icon'>⚖️</span><b>MTOW</b> : {mtow_str}</div>", unsafe_allow_html=True)
+
+            rid = str(row.get("remote_id_builtin", "unknown")).strip() or "unknown"
+            st.sidebar.markdown(f"<div class='sidebar-kv'><span class='icon'>📡</span><b>Remote ID</b> : {rid}</div>", unsafe_allow_html=True)
+
+            geo = str(row.get("geo_awareness", "unknown")).strip() or "unknown"
+            st.sidebar.markdown(f"<div class='sidebar-kv'><span class='icon'>🗺️</span><b>Geo-awareness</b> : {geo}</div>", unsafe_allow_html=True)
+
+            yr = coalesce(row.get("year_released"), default="—")
+            st.sidebar.markdown(f"<div class='sidebar-kv'><span class='icon'>📅</span><b>Released</b> : {yr}</div>", unsafe_allow_html=True)
+
+            # ----------------- Main body: compliance matrix -----------------
+            col1, col2, col3 = st.columns(3)
+
+            weight_g = row.get("mtom_g_nominal", "")
+            col1.markdown(
+                compliance_column("Current", eu_cls, uk_cls, weight_g, year_tag="current"),
+                unsafe_allow_html=True
+            )
+            col2.markdown(
+                compliance_column("2026", eu_cls, uk_cls, weight_g, year_tag="2026"),
+                unsafe_allow_html=True
+            )
+            col3.markdown(
+                compliance_column("2028 (planned)", eu_cls, uk_cls, weight_g, year_tag="2028"),
                 unsafe_allow_html=True
             )
 
-            # MAIN BODY: 3-column compliance comparator
-            render_compliance_panels(row)
-
         else:
-            model = None  # invalid model key, fall back to grid
+            model = None  # fall back to grid below
 
-    # If no model selected, show the model grid (two rows)
+    # No model selected => show the models grid
     if not model:
-        models = models_for(segment, series)
         items = []
+        models = models_for(segment, series)
         for _, r in models.iterrows():
-            # Sub info: EU/UK class + year
-            eu_c = (r.get("eu_class_marking") or "").strip()
-            uk_c = (r.get("uk_class_marking") or "").strip()
-            year = str(r.get("year_released") or "").strip()
+            eu_c = coalesce(r.get("eu_class_marking"), r.get("class_marking"))
+            uk_c = coalesce(r.get("uk_class_marking"), r.get("class_marking"))
+            yr = str(r.get("year_released", "") or "").strip()
             parts = []
             if eu_c or uk_c:
                 eu_show = eu_c if eu_c else "—"
                 uk_show = uk_c if uk_c else "—"
                 parts.append(f"Class: EU {eu_show} • UK {uk_show}")
-            if year:
-                parts.append(f"Released: {year}")
+            if yr:
+                parts.append(f"Released: {yr}")
             sub = " • ".join(parts)
 
             items.append(
