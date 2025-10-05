@@ -1,4 +1,4 @@
-# dronify.py — same UI as your “last good”, with robust image resolving
+# dronify.py — same UI as “last good”, but with robust image fallback
 import re
 import random
 import streamlit as st
@@ -60,24 +60,58 @@ RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/image
 
 def resolve_img(url: str) -> str:
     """
-    Be generous:
+    Accept:
     - Absolute URLs: return as-is
     - 'images/...' paths: convert to GitHub raw
-    - Bare filenames like 'mini_2.jpg' or 'air_3.png': treat as 'images/<filename>'
+    - Bare filenames like 'mini_2.jpg': treat as 'images/<filename>' on GitHub
     """
     url = (url or "").strip()
     if not url:
         return ""
-
     low = url.lower()
     if low.startswith("http://") or low.startswith("https://") or low.startswith("data:"):
         return url
-
     if low.startswith("images/"):
         return RAW_BASE + url.split("/", 1)[1]
-
-    # bare filename or relative path -> assume it's under /images
+    # bare filename or simple relative -> assume under /images
     return RAW_BASE + url.lstrip("/")
+
+# Fallback file mapping (based on the file list you showed)
+FALLBACK_FILENAMES = {
+    # Consumer / Mini
+    "mini": "mini_mavic.jpg",
+    "mini-2": "mini_2.jpg",
+    "mini-2-se": "mini_2_se.jpg",
+    "mini-3": "mini_3.jpg",
+    "mini-3-pro": "mini_3_pro.jpg",
+    "mini-4-pro": "mini_4_pro.jpg",
+    "mini-5-pro": "mini_5_pro.jpg",
+    # Consumer / Air
+    "air-2s": "air_2s.jpg",
+    "air-3": "air_3.png",
+    "air-3s": "air_3s.png",
+    # Avata & FPV
+    "avata": "avata.jpg",
+    "avata-2": "avata_2.jpg",
+    "dji-fpv": "fpv.jpg",
+    # Neo / Flip
+    "dji-neo": "dji_neo.jpg",
+    "dji-flip": "dji_flip.jpg",
+}
+
+def effective_image_url(row: pd.Series) -> str:
+    """
+    Returns an image URL for a row:
+    - Prefer row['image_url'] if set
+    - Otherwise use known filename mapping by model_key
+    - Resolve to GitHub raw URL
+    """
+    raw = str(row.get("image_url", "") or "").strip()
+    if not raw:
+        mk = str(row.get("model_key", "")).strip().lower()
+        fallback = FALLBACK_FILENAMES.get(mk, "")
+        raw = fallback
+    return resolve_img(raw)
 
 # Stage 1 hero images
 SEGMENT_HERO = {
@@ -117,16 +151,24 @@ def models_for(segment_key: str, series_key: str):
     return subset.drop(columns=["series_key", "name_key"])
 
 def random_image_for_series(segment_key: str, series_key: str) -> str:
-    """Pick a random model image from the series; if none, use segment hero."""
+    """Pick a random model image from the series (using fallback if needed); else use segment hero."""
     seg_l = str(segment_key).strip().lower()
     ser_l = str(series_key).strip().lower()
 
-    subset = df[(df["segment_norm"] == seg_l) & (df["series_norm"] == ser_l)]
-    subset = subset[subset["image_url"].astype(str).str.strip() != ""]
+    subset = df[(df["segment_norm"] == seg_l) & (df["series_norm"] == ser_l)].copy()
     if subset.empty:
         return SEGMENT_HERO.get(segment_key, "")
-    raw = str(subset.sample(1, random_state=None)["image_url"].iloc[0])
-    return resolve_img(raw)
+
+    # build a list of rows that actually have a resolvable image (explicit or fallback)
+    candidates = []
+    for _, r in subset.iterrows():
+        url = effective_image_url(r)
+        if url:  # has something we can show
+            candidates.append(url)
+
+    if not candidates:
+        return SEGMENT_HERO.get(segment_key, "")
+    return random.choice(candidates)
 
 # ---------- Styles ----------
 st.markdown("""
@@ -202,7 +244,8 @@ else:
             back_qs = f"segment={segment}&series={series}"
             st.sidebar.markdown(f"<a class='sidebar-back' href='?{back_qs}' target='_self'>← Back to models</a>", unsafe_allow_html=True)
 
-            img_url = resolve_img(row.get("image_url", ""))
+            # Use effective (explicit or fallback) image
+            img_url = effective_image_url(row)
             if img_url:
                 st.sidebar.image(img_url, use_container_width=True, caption=row.get("marketing_name", ""))
 
@@ -252,7 +295,6 @@ else:
         models = models_for(segment, series)
         items = []
         for _, r in models.iterrows():
-            # Sub info: EU/UK class + weight band
             eu_c = (r.get("eu_class_marking") or r.get("class_marking") or "").strip()
             uk_c = (r.get("uk_class_marking") or r.get("class_marking") or "").strip()
             parts = []
@@ -274,7 +316,7 @@ else:
                     f"segment={segment}&series={series}&model={r['model_key']}",
                     r.get("marketing_name", ""),
                     sub=sub,
-                    img_url=resolve_img(str(r.get("image_url", "")))
+                    img_url=effective_image_url(r)  # <-- use fallback here too
                 )
             )
         render_two_rows(f"Choose a drone ({seg_label} → {ser_label})", items)
