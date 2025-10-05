@@ -1,6 +1,7 @@
 # dronify.py — Navigation (stage 1/2/3) + robust image resolver + sidebar
 # + 3x4 compliance grid (Current / 2026 / 2028 × A1/A2/A3/Specific bricks)
-# Bricks now reflect tech compliance (Remote ID, Geo-awareness) from YAML.
+# Bricks reflect tech compliance (Remote ID, Geo-awareness) from YAML
+# AND user-declared credentials (Operator ID, Flyer ID, A2 CofC, GVC, OA).
 
 import random
 from pathlib import Path
@@ -78,7 +79,6 @@ def resolve_img(url: str) -> str:
         return u
     # normalise
     p = u.replace("\\", "/").lstrip("/")
-    # if already starts with images/, keep only one images/ segment
     while p.lower().startswith("images/"):
         p = p.split("/", 1)[1] if "/" in p else ""
     if not p:
@@ -214,6 +214,9 @@ st.markdown("""
 .legend .info { background:#2563EB; color:white; }
 .legend .warn { background:#D97706; color:white; }
 .legend .na   { background:#9CA3AF; color:white; }
+
+/* Sidebar credentials container spacing */
+.cred-wrap { margin-top: 10px; padding-top: 8px; border-top: 1px solid #E5E7EB; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -231,14 +234,14 @@ def render_row(title: str, items: list[str]):
 def render_two_rows(title: str, items: list[str]):
     st.markdown(f"<div class='h1'>{title}</div><div class='strip2'>{''.join(items)}</div>", unsafe_allow_html=True)
 
-# ------------------------------- Compliance bricks -------------------------------
+# ------------------------------- Compliance & badges -------------------------------
 
 def _is_c0(eu_cls: str, weight: int | None) -> bool:
     e = (eu_cls or "").strip().upper()
     return (e == "C0") or (weight is not None and weight < 250)
 
 def _a2_applicable(eu_cls: str) -> bool:
-    # Conservative: mainly C2. You may expand to ("C1","C2") if desired.
+    # conservative: primarily C2; change to ("C1","C2") if desired
     e = (eu_cls or "").strip().upper()
     return e == "C2"
 
@@ -267,22 +270,22 @@ def _era_requirements(row: pd.Series, era: str):
 
     # Remote ID requirement per era
     if era == "current":
-        rid_required = False  # modern drones often have it; not mandated for all legacy today
+        rid_required = False
     else:
         rid_required = True
 
-    # Geo-awareness requirement per era
+    # Geo-awareness per era
     if era == "current":
         geo_required = False
     elif era == "2026":
         geo_required = True
-    else:  # 2028 (planned)
+    else:  # 2028 planned
         geo_required = has_cam and (weight is not None and weight >= 100)
 
     return oper, flyer, rid_required, rid_has, rid_unknown, geo_required, geo_has, geo_unknown
 
 def _badge_state(required: bool, has_it: bool, unknown: bool, label: str) -> tuple[str, str]:
-    """Return (badge_html, tone_component) where tone_component in {'ok','warn','na'}."""
+    """Tech-based state (Remote ID / Geo-awareness) with tone impact."""
     if unknown:
         return (f"<span class='kv-pill kv-grey'>{label}: Unknown</span>", "na")
     if required:
@@ -296,8 +299,21 @@ def _badge_state(required: bool, has_it: bool, unknown: bool, label: str) -> tup
     else:
         return (f"<span class='kv-pill kv-grey'>{label}: Not required</span>", "ok")
 
-def _badge_required(needed: bool, label: str):
-    return f"<span class='kv-pill {'kv-red' if needed else 'kv-green'}'>{label}: {'Required' if needed else 'Not required'}</span>"
+def _qual_badge(required: bool, user_has: bool, label: str) -> tuple[str, str]:
+    """User-credential badge with tone impact: green if required+have, red if required+missing, grey otherwise."""
+    if required:
+        if user_has:
+            return (f"<span class='kv-pill kv-green'>{label}: Have</span>", "ok")
+        else:
+            return (f"<span class='kv-pill kv-red'>{label}: Required</span>", "warn")
+    else:
+        # not required: show user have as green, else grey
+        if user_has:
+            return (f"<span class='kv-pill kv-green'>{label}: Have</span>", "ok")
+        return (f"<span class='kv-pill kv-grey'>{label}: Not required</span>", "ok")
+
+def _optional_have(user_has: bool, label: str) -> str:
+    return f"<span class='kv-pill {'kv-green' if user_has else 'kv-grey'}'>{label}: {'Have' if user_has else 'Not declared'}</span>"
 
 def _brick(title: str, status: str, tone: str, separation: str, toel: str,
            quals: list[str], tech: list[str]) -> str:
@@ -318,45 +334,49 @@ def _brick(title: str, status: str, tone: str, separation: str, toel: str,
     </div>
     """
 
-def _combine_tone(base: str, tech_tones: list[str]) -> str:
-    """Escalate tone if any tech check fails. Priority: ok < info < warn < na"""
+def _combine_tone(base: str, extra_tones: list[str]) -> str:
     order = {"ok":0, "info":1, "warn":2, "na":3}
     t = base
-    for tt in tech_tones:
+    for tt in extra_tones:
         if order.get(tt,0) > order.get(t,0):
             t = tt
     return t
 
-def _brick_sets(row: pd.Series, era: str):
-    """Build A1/A2/A3/Specific bricks for a given era, adjusting tone by tech compliance."""
+def _brick_sets(row: pd.Series, era: str,
+                have_operator: bool, have_flyer: bool, have_a1a3: bool,
+                have_a2cofc: bool, have_gvc: bool, have_oa: bool):
+    """Build bricks for a given era using both tech + user credentials."""
     eu = coalesce(row.get("eu_class_marking"), row.get("class_marking")).upper()
     weight = _to_int(row.get("mtom_g_nominal"))
     is_c0 = _is_c0(eu, weight)
     a2_ok = _a2_applicable(eu)
 
-    oper, flyer, rid_req, rid_has, rid_unknown, geo_req, geo_has, geo_unknown = _era_requirements(row, era)
+    # Tech + base era reqs
+    oper_req, flyer_req, rid_req, rid_has, rid_unknown, geo_req, geo_has, geo_unknown = _era_requirements(row, era)
 
-    op_b   = _badge_required(oper, "Operator ID")
-    fly_b  = _badge_required(flyer, "Flyer ID (basic test)")
+    rid_b, rid_tone = _badge_state(rid_req, rid_has, rid_unknown, "Remote ID")
+    geo_b, geo_tone = _badge_state(geo_req, geo_has, geo_unknown, "Geo-awareness")
 
-    rid_b, rid_tone   = _badge_state(rid_req, rid_has, rid_unknown, "Remote ID")
-    geo_b, geo_tone   = _badge_state(geo_req, geo_has, geo_unknown, "Geo-awareness")
+    # User credentials (Operator / Flyer)
+    op_b, op_tone   = _qual_badge(oper_req, have_operator, "Operator ID")
+    fly_b, fly_tone = _qual_badge(flyer_req, have_flyer, "Flyer ID")
 
-    tech_tones = [rid_tone, geo_tone]
+    a1a3_b = _optional_have(have_a1a3, "A1/A3")
 
     bricks = []
 
     # A1
     if is_c0 or eu == "C1":
-        base_tone = "ok"
-        tone = _combine_tone(base_tone, tech_tones)
+        base = "ok"
+        tone = _combine_tone(base, [rid_tone, geo_tone, op_tone, fly_tone])
         bricks.append(_brick(
             "A1 — Close to people",
             "Allowed",
             tone,
             "Fly close to people; avoid assemblies/crowds.",
             "TOAL: sensible separation; follow local restrictions.",
-            [op_b, fly_b], [rid_b, geo_b]
+            [op_b, fly_b, a1a3_b],
+            [rid_b, geo_b]
         ))
     else:
         bricks.append(_brick(
@@ -365,20 +385,23 @@ def _brick_sets(row: pd.Series, era: str):
             "na",
             "A1 primarily for C0/C1 class drones.",
             "Use A3 or Specific instead for heavier classes.",
-            [op_b, fly_b], [rid_b, geo_b]
+            [op_b, fly_b, a1a3_b],
+            [rid_b, geo_b]
         ))
 
     # A2
     if a2_ok:
-        base_tone = "info"
-        tone = _combine_tone(base_tone, tech_tones)
+        # Requires A2 CofC (user)
+        a2_b, a2_tone = _qual_badge(True, have_a2cofc, "A2 CofC")
+        base = "info"
+        tone = _combine_tone(base, [rid_tone, geo_tone, op_tone, fly_tone, a2_tone])
         bricks.append(_brick(
             "A2 — Close with A2 CofC",
             "Allowed with A2 CofC",
             tone,
             "Keep ≥ 50 m from uninvolved people.",
             "TOAL: safe distance; follow manufacturer guidance.",
-            [op_b, fly_b, "<span class='kv-pill kv-red'>A2 CofC: Required</span>"],
+            [op_b, fly_b, a2_b],
             [rid_b, geo_b]
         ))
     else:
@@ -393,54 +416,59 @@ def _brick_sets(row: pd.Series, era: str):
         ))
 
     # A3
-    base_tone = "info"
-    tone = _combine_tone(base_tone, tech_tones)
+    base = "info"
+    tone = _combine_tone(base, [rid_tone, geo_tone, op_tone, fly_tone])
     bricks.append(_brick(
         "A3 — Far from people",
         "Allowed",
         tone,
         "Keep ≥ 150 m from residential/commercial/recreational areas.",
         "TOAL: well away from uninvolved people and built-up areas.",
-        [op_b, fly_b], [rid_b, geo_b]
+        [op_b, fly_b, a1a3_b],
+        [rid_b, geo_b]
     ))
 
     # Specific
-    base_tone = "warn"
-    tone = _combine_tone(base_tone, tech_tones)
+    gvc_b, gvc_tone = _qual_badge(True, have_gvc, "GVC")
+    oa_b,  oa_tone  = _qual_badge(True, have_oa,  "OA")
+    base = "warn"
+    tone = _combine_tone(base, [rid_tone, geo_tone, op_tone, fly_tone, gvc_tone, oa_tone])
     bricks.append(_brick(
         "Specific — OA / GVC",
         "Available via OA/GVC",
         tone,
         "Risk-assessed operations per OA; distances per ops manual.",
         "TOAL & mitigations defined by your approved procedures.",
-        [op_b, fly_b, "<span class='kv-pill kv-red'>GVC: Required</span>", "<span class='kv-pill kv-red'>OA: Required</span>"],
+        [op_b, fly_b, gvc_b, oa_b],
         [rid_b, geo_b]
     ))
 
     return "\n".join(bricks)
 
-def render_compliance_grid(row: pd.Series):
+def render_compliance_grid(row: pd.Series,
+                           have_operator: bool, have_flyer: bool, have_a1a3: bool,
+                           have_a2cofc: bool, have_gvc: bool, have_oa: bool):
     # Render grid with headers + vertical dividers + legend
     col_html = f"""
     <div class='compliance-row'>
       <div class='col-box'>
         <div class='col-title'>Current</div>
-        {_brick_sets(row, "current")}
+        {_brick_sets(row, "current", have_operator, have_flyer, have_a1a3, have_a2cofc, have_gvc, have_oa)}
       </div>
       <div class='col-box'>
         <div class='col-title'>2026</div>
-        {_brick_sets(row, "2026")}
+        {_brick_sets(row, "2026", have_operator, have_flyer, have_a1a3, have_a2cofc, have_gvc, have_oa)}
       </div>
       <div class='col-box'>
         <div class='col-title'>2028 (planned)</div>
-        {_brick_sets(row, "2028")}
+        {_brick_sets(row, "2028", have_operator, have_flyer, have_a1a3, have_a2cofc, have_gvc, have_oa)}
       </div>
     </div>
     <div class='legend'>
       <span>Legend:</span>
       <span class='chip ok'>Allowed</span>
       <span class='chip info'>Allowed with additional conditions (e.g., A2 CofC)</span>
-      <span class='chip warn'>Available with caveats / tech shortfall to resolve</span>
+      <span class='chip warn'>Available with caveats / missing requirements</span>
       <span class='chip na'>Not applicable</span>
     </div>
     """
@@ -514,8 +542,20 @@ else:
                 unsafe_allow_html=True
             )
 
-            # Main body — 3×4 bricks with headers, dividers, legend
-            render_compliance_grid(row)
+            # ------------------- Your credentials (reactive) -------------------
+            st.sidebar.markdown("<div class='cred-wrap'></div>", unsafe_allow_html=True)
+            st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
+
+            have_operator = st.sidebar.checkbox("I have an Operator ID", value=st.session_state.get("have_operator", False), key="have_operator")
+            have_flyer    = st.sidebar.checkbox("I have a Flyer ID (basic test)", value=st.session_state.get("have_flyer", False), key="have_flyer")
+            have_a1a3     = st.sidebar.checkbox("I have A1/A3 training (optional)", value=st.session_state.get("have_a1a3", False), key="have_a1a3")
+            st.sidebar.markdown("---")
+            have_a2cofc   = st.sidebar.checkbox("I have A2 CofC", value=st.session_state.get("have_a2cofc", False), key="have_a2cofc")
+            have_gvc      = st.sidebar.checkbox("I have GVC", value=st.session_state.get("have_gvc", False), key="have_gvc")
+            have_oa       = st.sidebar.checkbox("I have an OA (Operational Authorisation)", value=st.session_state.get("have_oa", False), key="have_oa")
+
+            # Main body — 3×4 bricks with headers, dividers, legend — user-aware
+            render_compliance_grid(row, have_operator, have_flyer, have_a1a3, have_a2cofc, have_gvc, have_oa)
 
         else:
             model = None  # fall back to grid
