@@ -12,7 +12,9 @@ TAXONOMY_PATH = Path("taxonomy.yaml")
 
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
-# ---------- Helpers: data & images ----------
+# ---------------------------------------------------------------------
+# Data helpers
+# ---------------------------------------------------------------------
 def load_yaml(path: Path):
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -23,7 +25,6 @@ def load_data():
     taxonomy = load_yaml(TAXONOMY_PATH)
     df = pd.DataFrame(dataset["data"])
 
-    # Ensure columns (robustness)
     needed = [
         "image_url", "segment", "series", "marketing_name", "model_key",
         "mtom_g_nominal", "eu_class_marking", "uk_class_marking",
@@ -33,10 +34,8 @@ def load_data():
         if col not in df.columns:
             df[col] = ""
 
-    # Normalized
     df["segment_norm"] = df["segment"].astype(str).str.strip().str.lower()
     df["series_norm"]  = df["series"].astype(str).str.strip().str.lower()
-
     return df, taxonomy
 
 def resolve_img(url: str) -> str:
@@ -48,10 +47,11 @@ def resolve_img(url: str) -> str:
         return url
     if low.startswith("images/"):
         return RAW_BASE + url.split("/", 1)[1]
-    # bare filename -> assume images/
     return RAW_BASE + url.lstrip("/")
 
-# ---------- UI CSS ----------
+# ---------------------------------------------------------------------
+# UI CSS
+# ---------------------------------------------------------------------
 st.markdown(
     """
 <style>
@@ -117,7 +117,9 @@ section[data-testid="stSidebar"] label p { font-size: .9rem; margin: 0; }
     unsafe_allow_html=True,
 )
 
-# ---------- Query params ----------
+# ---------------------------------------------------------------------
+# Query params
+# ---------------------------------------------------------------------
 def get_qp():
     try:
         return dict(st.query_params)  # Streamlit ≥1.32
@@ -134,7 +136,9 @@ model   = qp.get("model")
 
 df, taxonomy = load_data()
 
-# ---------- Taxonomy helpers ----------
+# ---------------------------------------------------------------------
+# Taxonomy helpers
+# ---------------------------------------------------------------------
 def series_defs_for(segment_key: str):
     seg = next(s for s in taxonomy["segments"] if s["key"] == segment_key)
     seg_l = str(segment_key).strip().lower()
@@ -172,7 +176,9 @@ def models_for(segment_key: str, series_key: str):
     )
     return subset.drop(columns=["name_key"])
 
-# ---------- Brick rendering ----------
+# ---------------------------------------------------------------------
+# Brick rendering bits
+# ---------------------------------------------------------------------
 def pill_ok(txt, title=None):
     t = f' title="{title}"' if title else ""
     return f"<span class='pill pill-ok'{t}>{txt}</span>"
@@ -212,6 +218,9 @@ def card(title, status_badge, body_html, kind="possible"):
 def yesish(val: str) -> bool:
     return str(val).strip().lower() in {"yes", "true", "1", "ok"}
 
+# ---------------------------------------------------------------------
+# Rule text (kept simple; you can swap to jurisdiction-specific strings)
+# ---------------------------------------------------------------------
 def rule_text_a1():
     return (
         "Fly close to people; avoid assemblies/crowds. TOAL: sensible separation; "
@@ -224,7 +233,7 @@ def rule_text_a2(year: int):
             "A2 mainly for C2 drones (sometimes C1 by nuance). Transitional (≤2 kg) "
             "until Jan 2026: keep ≥50 m from uninvolved people."
         )
-    return "C2: 30 m from uninvolved people (5 m in low-speed)."
+    return "C2/UK2: keep 30 m from uninvolved people (5 m in low-speed)."
 
 def rule_text_a3():
     return (
@@ -239,81 +248,147 @@ def rule_text_specific():
         "flight; TOAL may be reduced to 30 m; no overflight of assemblies)."
     )
 
-def compute_bricks(row: pd.Series, creds: dict, year: int):
+# ---------------------------------------------------------------------
+# Eligibility gating (fixes your A1 bug)
+# ---------------------------------------------------------------------
+def _lc(x):
+    return str(x or "").strip().lower()
+
+def _parse_mtow_g(row) -> float | None:
+    raw = row.get("mtom_g_nominal", "")
+    if pd.isna(raw):
+        return None
+    s = str(raw)
+    try:
+        return float(s)
+    except Exception:
+        import re
+        m = re.search(r"([\d\.]+)", s)
+        return float(m.group(1)) if m else None
+
+def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -> dict:
+    """
+    Hard gates for A1/A2/A3 so heavy aircraft never show A1.
+    UK bridging: treat EU C-classes as equivalent UK classes until end of 2027.
+    """
+    eu = _lc(row.get("eu_class_marking", ""))
+    uk = _lc(row.get("uk_class_marking", ""))
+    mtow = _parse_mtow_g(row)
+
+    bridge = (jurisdiction.upper() == "UK" and year <= 2027)
+
+    # A1 — Over people: only truly light/classed aircraft
+    a1 = False
+    if mtow is not None and mtow <= 250:
+        a1 = True
+    if uk in {"uk0", "uk1"}:
+        a1 = True
+    if bridge and eu in {"c0", "c1"}:
+        a1 = True
+
+    # A2 — Near people: UK2 or (bridge) C2; plus legacy UK fallback (<2kg pre-2026)
+    a2 = False
+    if uk == "uk2" or (bridge and eu == "c2"):
+        if mtow is None or mtow <= 4000:
+            a2 = True
+    if (jurisdiction.upper() == "UK" and year < 2026 and
+        mtow is not None and mtow <= 2000):
+        a2 = True
+
+    # A3 — Far from people: broadly <25 kg in Open, or appropriate class
+    a3 = False
+    if mtow is not None and mtow < 25000:
+        a3 = True
+    if uk in {"uk3", "uk4"} or (bridge and eu in {"c2", "c3", "c4"}):
+        a3 = True
+
+    return {"a1": a1, "a2": a2, "a3": a3}
+
+# ---------------------------------------------------------------------
+# Compute bricks (uses eligibility gates)
+# ---------------------------------------------------------------------
+def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "UK"):
     """
     Returns (html_a1, html_a2, html_a3, html_specific)
     """
     has_cam = yesish(row.get("has_camera", "yes"))
     geo_ok  = yesish(row.get("geo_awareness", "unknown"))
     rid_ok  = yesish(row.get("remote_id_builtin", "unknown"))
-    eu      = str(row.get("eu_class_marking", "")).strip().lower()
+
+    elig = eligible_open_subcats(row, year, jurisdiction)
 
     # Credentials
     have_op   = creds.get("op", False)
     have_fl   = creds.get("flyer", False)
-    have_a1a3 = creds.get("a1a3", False)
+    have_a1a3 = creds.get("a1a3", False)  # informational only
     have_a2   = creds.get("a2", False)
     have_gvc  = creds.get("gvc", False)
     have_oa   = creds.get("oa", False)
 
     # ---------- A1 ----------
-    pills_a1 = []
-    if has_cam and not have_op:
-        pills_a1.append(pill_need("Operator ID: Required",
-                         "Required for all drones with a camera (registration of the operator)."))
+    if not elig["a1"]:
+        html_a1 = card(
+            "A1 — Close to people",
+            badge("Not applicable", "na"),
+            f"<div class='small'>{rule_text_a1()}</div>"
+            f"<div>{pill_info('Not eligible by class/weight')}</div>",
+            "na",
+        )
     else:
-        pills_a1.append(pill_ok("Operator ID: OK"))
-
-    if has_cam and not have_fl:
-        pills_a1.append(pill_need("Flyer ID: Required", "Basic test for camera drones."))
-    else:
-        pills_a1.append(pill_ok("Flyer ID: OK"))
-
-    pills_a1.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
-    pills_a1.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
-    pills_a1.append(pill_info("A1/A3: Optional"))
-
-    a1_all_ok = all(("Required" not in x) for x in pills_a1)
-    a1_kind   = "allowed" if a1_all_ok else "possible"
-    a1_badge  = badge("Allowed" if a1_kind == "allowed" else "Possible (additional requirements)", a1_kind)
-    a1_body   = f"<div class='small'>{rule_text_a1()}</div><div>{''.join(pills_a1)}</div>"
-    html_a1   = card("A1 — Close to people", a1_badge, a1_body, a1_kind)
+        pills_a1 = []
+        pills_a1.append(pill_need("Operator ID: Required") if (has_cam and not have_op) else pill_ok("Operator ID: OK"))
+        pills_a1.append(pill_need("Flyer ID: Required") if (has_cam and not have_fl) else pill_ok("Flyer ID: OK"))
+        pills_a1.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
+        pills_a1.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
+        pills_a1.append(pill_info("A1/A3: Optional"))
+        a1_all_ok = all(("Required" not in x) for x in pills_a1)
+        a1_kind   = "allowed" if a1_all_ok else "possible"
+        a1_badge  = badge("Allowed" if a1_kind == "allowed" else "Possible (additional requirements)", a1_kind)
+        a1_body   = f"<div class='small'>{rule_text_a1()}</div><div>{''.join(pills_a1)}</div>"
+        html_a1   = card("A1 — Close to people", a1_badge, a1_body, a1_kind)
 
     # ---------- A2 ----------
-    is_c2 = (eu == "c2")
-    pills_a2 = []
-    if is_c2:
+    if not elig["a2"]:
+        html_a2 = card(
+            "A2 — Close with A2 CofC",
+            badge("Not applicable", "na"),
+            f"<div class='small'>{rule_text_a2(year)}</div>"
+            f"<div>{pill_info('Not eligible by class/weight for A2')}</div>",
+            "na",
+        )
+    else:
+        pills_a2 = []
         pills_a2.append(pill_need("Operator ID: Required") if not have_op else pill_ok("Operator ID: OK"))
         pills_a2.append(pill_need("Flyer ID: Required") if not have_fl else pill_ok("Flyer ID: OK"))
         pills_a2.append(pill_need("A2 CofC: Required") if not have_a2 else pill_ok("A2 CofC: OK"))
         pills_a2.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
         pills_a2.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
-
         a2_all_ok = all(("Required" not in x) for x in pills_a2)
         a2_kind   = "allowed" if a2_all_ok else "possible"
         a2_badge  = badge("Allowed" if a2_kind == "allowed" else "Possible (additional requirements)", a2_kind)
         a2_body   = f"<div class='small'>{rule_text_a2(year)}</div><div>{''.join(pills_a2)}</div>"
         html_a2   = card("A2 — Close with A2 CofC", a2_badge, a2_body, a2_kind)
-    else:
-        pills_a2.append(pill_info("A2 CofC: N/A"))
-        pills_a2.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
-        pills_a2.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
-        a2_badge = badge("Not applicable", "na")
-        a2_body  = f"<div class='small'>{rule_text_a2(year)}</div><div>{''.join(pills_a2)}</div>"
-        html_a2  = card("A2 — Close with A2 CofC", a2_badge, a2_body, "na")
 
     # ---------- A3 ----------
-    pills_a3 = []
-    pills_a3.append(pill_need("Operator ID: Required") if not have_op else pill_ok("Operator ID: OK"))
-    pills_a3.append(pill_need("Flyer ID: Required") if not have_fl else pill_ok("Flyer ID: OK"))
-    pills_a3.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
-    pills_a3.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
-
-    a3_all_ok = all(("Required" not in x) for x in pills_a3)
-    a3_kind   = "allowed" if a3_all_ok else "possible"
-    a3_badge  = badge("Allowed" if a3_kind == "allowed" else "Possible (additional requirements)", a3_kind)
-    a3_body   = f"<div class='small'>{rule_text_a3()}</div><div>{''.join(pills_a3)}</div>"
-    html_a3   = card("A3 — Far from people", a3_badge, a3_body, a3_kind)
+    if not elig["a3"]:
+        html_a3 = card(
+            "A3 — Far from people",
+            badge("Not applicable", "na"),
+            f"<div class='small'>{rule_text_a3()}</div>"
+            f"<div>{pill_info('Not eligible by class/weight for A3')}</div>",
+            "na",
+        )
+    else:
+        pills_a3 = []
+        pills_a3.append(pill_need("Operator ID: Required") if not have_op else pill_ok("Operator ID: OK"))
+        pills_a3.append(pill_need("Flyer ID: Required") if not have_fl else pill_ok("Flyer ID: OK"))
+        pills_a3.append(pill_ok("Remote ID: OK") if rid_ok else pill_need("Remote ID: Required"))
+        pills_a3.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
+        a3_all_ok = all(("Required" not in x) for x in pills_a3)
+        a3_kind   = "allowed" if a3_all_ok else "possible"
+        a3_badge  = badge("Allowed" if a3_kind == "allowed" else "Possible (additional requirements)", a3_kind)
+        a3_body   = f"<div class='small'>{rule_text_a3()}</div><div>{''.join(pills_a3)}</div>"
+        html_a3   = card("A3 — Far from people", a3_badge, a3_body, a3_kind)
 
     # ---------- Specific (OA / GVC) ----------
     pills_sp = []
@@ -333,7 +408,9 @@ def compute_bricks(row: pd.Series, creds: dict, year: int):
 
     return html_a1, html_a2, html_a3, html_sp
 
-# ---------- STAGE 1 & 2 ----------
+# ---------------------------------------------------------------------
+# STAGE 1 & 2
+# ---------------------------------------------------------------------
 SEGMENT_HERO = {
     "consumer": resolve_img("images/consumer.jpg"),
     "pro": resolve_img("images/professional.jpg"),
@@ -359,7 +436,9 @@ def render_row(title: str, items: list[str]):
         unsafe_allow_html=True,
     )
 
-# ---------- PAGE FLOW ----------
+# ---------------------------------------------------------------------
+# PAGE FLOW
+# ---------------------------------------------------------------------
 if not segment:
     # Stage 1: choose group
     items = []
@@ -437,12 +516,12 @@ else:
         have_oa   = st.sidebar.checkbox("OA (Operational Authorisation)", value=False, key="c_oa")
         creds = dict(op=have_op, flyer=have_fl, a1a3=have_a1a3, a2=have_a2, gvc=have_gvc, oa=have_oa)
 
-        # --------- Compute all bricks ---------
-        a_now = compute_bricks(row, creds, 2025)
-        a_26  = compute_bricks(row, creds, 2026)
-        a_28  = compute_bricks(row, creds, 2028)
+        # --------- Compute all bricks (UK by default) ---------
+        a_now = compute_bricks(row, creds, 2025, jurisdiction="UK")
+        a_26  = compute_bricks(row, creds, 2026, jurisdiction="UK")
+        a_28  = compute_bricks(row, creds, 2028, jurisdiction="UK")
 
-        # ---------- HEADERS (NOW | 2026 | 2028) using SAME grid as bricks ----------
+        # ---------- HEADERS (NOW | 2026 | 2028) ----------
         st.markdown(
             """
 <div class='grid3 divided' style='margin:4px 0 10px'>
