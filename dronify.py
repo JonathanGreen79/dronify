@@ -1,7 +1,4 @@
-# dronify.py — UI + compliance board
-# - Keeps your “last good” navigation & cards
-# - Adds: sidebar legend, fixed headers, vertical dividers, wording tweak
-# - Leaves your brick logic intact
+# dronify.py — UI + compliance board (fixed 3-column layout + coloured bricks)
 
 import random
 from pathlib import Path
@@ -25,7 +22,6 @@ def load_data():
     taxonomy = load_yaml(TAXONOMY_PATH)
     df = pd.DataFrame(dataset["data"])
 
-    # Columns that must exist for UI not to break
     must_cols = [
         "image_url","segment","series","marketing_name","model_key",
         "mtom_g_nominal","eu_class_marking","uk_class_marking",
@@ -36,7 +32,6 @@ def load_data():
         if c not in df.columns:
             df[c] = ""
 
-    # normalized helpers
     df["segment_norm"] = df["segment"].astype(str).str.strip().str.lower()
     df["series_norm"]  = df["series"].astype(str).str.strip().str.lower()
     return df, taxonomy
@@ -60,11 +55,6 @@ model    = qp.get("model")
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
 def resolve_img(url: str) -> str:
-    """
-    - Absolute URLs passed through
-    - 'images/...' → GH raw path
-    - bare filenames → assumed under /images
-    """
     u = (url or "").strip()
     if not u:
         return ""
@@ -91,9 +81,8 @@ def series_defs_for(segment_key: str):
     return [s for s in seg["series"] if s["key"].strip().lower() in present]
 
 def pad_digits_for_natural(s: pd.Series, width: int = 6) -> pd.Series:
-    return (
-        s.astype(str).str.lower()
-         .str.replace(r"\d+", lambda m: f"{int(m.group(0)):0{width}d}", regex=True)
+    return s.astype(str).str.lower().str.replace(
+        r"\d+", lambda m: f"{int(m.group(0)):0{width}d}", regex=True
     )
 
 def models_for(segment_key: str, series_key: str):
@@ -123,32 +112,28 @@ POSSIBLE_LABEL = "Possible (additional requirements)"
 
 st.markdown("""
 <style>
-/* keep page tidy */
 .block-container { padding-top: 1.05rem; }
 
-/* Card grid — unchanged from your "last good" */
+/* Cards (stage 1/2) */
 .card {
   width: 260px; height: 240px; border: 1px solid #E5E7EB; border-radius: 14px;
   background: #fff; text-decoration: none !important; color: #111827 !important;
-  display: block; padding: 12px; transition: box-shadow .15s ease, transform .15s ease, border-color .15s ease;
+  display: block; padding: 12px; transition: box-shadow .15s, transform .15s, border-color .15s;
 }
 .card:hover { border-color: #D1D5DB; box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-2px); }
-
 .img { width: 100%; height: 150px; border-radius: 10px; background: #F3F4F6;
        overflow: hidden; display:flex; align-items:center; justify-content:center; }
 .img > img { width: 100%; height: 100%; object-fit: cover; }
 .title { margin-top: 10px; text-align: center; font-weight: 700; font-size: 0.98rem; }
-.sub   { margin-top: 4px;  text-align: center; font-size: .8rem; color: #6B7280; }
+.sub   { margin-top: 4px; text-align: center; font-size: .8rem; color: #6B7280; }
 .strip { display:flex; flex-wrap:nowrap; gap:14px; overflow-x:auto; padding:8px 2px; margin:0; }
 .strip2{ display:grid; grid-auto-flow:column; grid-auto-columns:260px; grid-template-rows:repeat(2,1fr);
          gap:14px; overflow-x:auto; padding:8px 2px; margin:0; }
 .h1 { font-weight:800; font-size:1.2rem; color:#1F2937; margin:0 0 12px 0; }
 
-/* Sidebar visuals */
+/* Sidebar bits */
 .sidebar-title{ font-weight:800; font-size:1.05rem; margin:.6rem 0 .2rem; }
 .badge { display:inline-block; padding:3px 10px; border-radius:999px; background:#EEF2FF; color:#3730A3; font-weight:600; font-size:.78rem; }
-.badge-red{ background:#FEE2E2; color:#991B1B; }
-.badge-green{ background:#DCFCE7; color:#14532D; }
 .flagline { display:flex; align-items:center; gap:8px; margin:.25rem 0; }
 .flagline img{ width:20px; height:20px; border-radius:3px; }
 
@@ -159,27 +144,32 @@ st.markdown("""
 .kv{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 .kv .pill{ padding:6px 10px; border-radius:999px; font-weight:600; font-size:.78rem; border:1px solid #E5E7EB; background:#F9FAFB; }
 
-.ok    { background:#DCFCE7; border-color:#BBF7D0; color:#14532D; }
-.warn  { background:#FEF9C3; border-color:#FDE68A; color:#854D0E; }
-.deny  { background:#FEE2E2; border-color:#FECACA; color:#991B1B; }
-.info  { background:#EEF2FF; border-color:#E0E7FF; color:#3730A3; }
+/* brick background by status */
+.brick.ok    { background:#ECFDF5; border-color:#BBF7D0; }
+.brick.info  { background:#EEF2FF; border-color:#E0E7FF; }
+.brick.warn  { background:#FFFBEB; border-color:#FDE68A; }
+.brick.deny  { background:#FEF2F2; border-color:#FECACA; }
 
-/* Column headers */
-.section-h { font-weight:800; font-size:1.15rem; margin:0 0 8px 2px; color:#111827; }
-
-/* Vertical dividers between the three columns */
+/* vertical dividers between the three columns (single 3-col row) */
 div[data-testid="column"]:nth-child(2),
 div[data-testid="column"]:nth-child(3){
   border-left: 1px solid #E5E7EB;
   padding-left: 18px;
 }
 
-/* Small label on each brick for the top-right overall chip */
+/* Column headings */
+.colh { font-weight:800; font-size:1.15rem; margin: 0 0 10px 2px; color:#111827; }
+
+/* chip (top right) */
 .chip{ float:right; margin-top:-2px; }
+.pill.ok{ background:#DCFCE7; border-color:#BBF7D0; color:#14532D; }
+.pill.warn{ background:#FEF9C3; border-color:#FDE68A; color:#854D0E; }
+.pill.deny{ background:#FEE2E2; border-color:#FECACA; color:#991B1B; }
+.pill.info{ background:#EEF2FF; border-color:#E0E7FF; color:#3730A3; }
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------- Card link helpers --------------------
+# -------------------- Card helpers --------------------
 def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
     img = f"<div class='img'><img src='{img_url}' alt=''/></div>" if img_url else "<div class='img'></div>"
     sub_html = f"<div class='sub'>{sub}</div>" if sub else ""
@@ -199,11 +189,13 @@ def pill(text, klass="info", tooltip=None):
 def chip(text, color="info"):
     return f"<span class='pill {color} chip'>{text}</span>"
 
-def brick(title, summary, pills, top_chip=None, tone="info"):
-    chip_html = chip(top_chip, "ok" if top_chip=="Allowed" else ("deny" if top_chip=="Not applicable" else "info")) if top_chip else ""
-    return st.markdown(
+def brick(title, summary, pills, status="info", top_chip=None):
+    # status maps to .brick class and chip colour
+    chip_color = "ok" if top_chip == "Allowed" else ("warn" if top_chip == "Available via OA/GVC" else ("deny" if top_chip == "Not applicable" else "info"))
+    chip_html = chip(top_chip, chip_color) if top_chip else ""
+    st.markdown(
         f"""
-        <div class='brick'>
+        <div class='brick {status}'>
           <h4>{title}{chip_html}</h4>
           <div class='ex'>{summary}</div>
           <div class='kv'>{' '.join(pills)}</div>
@@ -212,27 +204,19 @@ def brick(title, summary, pills, top_chip=None, tone="info"):
     )
 
 # -------------------- Compliance-ish helpers --------------------
-def has_yes(x):  # helper for yaml values yes/no/unknown
+def has_yes(x):
     return str(x).strip().lower() in ("yes","true","1")
 
 def label_remote_geo(row, year):
-    """
-    Returns pill set for Remote ID & Geo-awareness across different years.
-    Uses the model's onboard capabilities from YAML, not user credentials.
-    """
     geo_ok = has_yes(row.get("geo_awareness"))
     rid_ok_now = has_yes(row.get("remote_id_builtin"))
-
-    # 2026: new UK classes require built-in RID
-    # 2028: legacy ≥100g + camera → RID required
     mtom = float(row.get("mtom_g_nominal") or 0)
     cam  = has_yes(row.get("has_camera"))
 
     if year == "now":
         rid_ok = rid_ok_now
     elif year == "2026":
-        # Treat as "RID OK" if device already has built-in RID
-        rid_ok = rid_ok_now
+        rid_ok = rid_ok_now  # new UK classes require RID, we can only display onboard capability
     else:  # 2028 planned
         rid_ok = rid_ok_now if (mtom >= 100 and cam) else rid_ok_now
 
@@ -240,7 +224,7 @@ def label_remote_geo(row, year):
     geo_pill  = pill("Geo-awareness: Onboard" if geo_ok else "Geo-awareness: Required", "ok" if geo_ok else "deny")
     return rid_pill, geo_pill
 
-def a1_summary():  # short line kept consistent
+def a1_summary():
     return "Fly close to people; avoid assemblies/crowds. TOAL: sensible separation; follow local restrictions."
 
 def a3_summary():
@@ -252,24 +236,22 @@ def a2_summary():
 def spec_summary():
     return "Risk-assessed operations per OA; distances per ops manual. TOAL & mitigations defined by your approved procedures."
 
-def operator_flyer_pills(show_op, show_flyer):
-    op = pill("Operator ID: Required", "deny") if show_op else pill("Operator ID: Have", "ok")
-    fy = pill("Flyer ID: Required", "deny") if show_flyer else pill("Flyer ID: Have", "ok")
+def operator_flyer_pills(need_op, need_fly):
+    op = pill("Operator ID: Required", "deny") if need_op else pill("Operator ID: Have", "ok")
+    fy = pill("Flyer ID: Required", "deny")    if need_fly else pill("Flyer ID: Have", "ok")
     return op, fy
 
-# -------------------- Sidebar: model details + controls + legend --------------------
+# -------------------- Sidebar: details / controls / legend --------------------
 def sidebar_for_model(row, seg_label, ser_label):
     st.sidebar.markdown(f"**{seg_label} → {ser_label}**")
 
     back_qs = f"segment={segment}&series={series}"
     st.sidebar.markdown(f"<a class='badge' href='?{back_qs}' target='_self'>← Back to models</a>", unsafe_allow_html=True)
 
-    # Thumbnail
     img = resolve_img(row.get("image_url",""))
     if img:
         st.sidebar.image(img, use_container_width=True, caption=row.get("marketing_name",""))
 
-    # EU / UK dotted with flags
     eu = (row.get("eu_class_marking") or "unknown").strip() or "unknown"
     uk = (row.get("uk_class_marking") or "unknown").strip() or "unknown"
     st.sidebar.markdown(
@@ -279,7 +261,6 @@ def sidebar_for_model(row, seg_label, ser_label):
         """, unsafe_allow_html=True
     )
 
-    # Key specs list
     st.sidebar.markdown("<div class='sidebar-title'>Key specs</div>", unsafe_allow_html=True)
     mtom = row.get("mtom_g_nominal","—")
     st.sidebar.markdown(f"- **Model**: {row.get('marketing_name','—')}")
@@ -297,7 +278,6 @@ def sidebar_for_model(row, seg_label, ser_label):
     have_gvc  = st.sidebar.checkbox("I have GVC", value=False)
     have_oa   = st.sidebar.checkbox("I have an OA (Operational Authorisation)", value=False)
 
-    # Legend (moved to sidebar bottom)
     st.sidebar.markdown("---")
     st.sidebar.markdown("### Legend")
     st.sidebar.markdown(
@@ -311,13 +291,10 @@ def sidebar_for_model(row, seg_label, ser_label):
         """, unsafe_allow_html=True
     )
 
-    return {
-        "op": have_op, "fly": have_fly, "a1a3": have_a1a3, "a2": have_a2, "gvc": have_gvc, "oa": have_oa
-    }
+    return {"op": have_op, "fly": have_fly, "a1a3": have_a1a3, "a2": have_a2, "gvc": have_gvc, "oa": have_oa}
 
 # -------------------- Screens --------------------
 if not segment:
-    # Stage 1 — choose group
     items = []
     for seg in taxonomy["segments"]:
         img = SEGMENT_HERO.get(seg["key"], "")
@@ -333,7 +310,6 @@ elif not series:
     render_row(f"Choose a series ({seg_label})", items)
 
 else:
-    # Stage 3 — grid or details
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     ser_label = next(s["label"] for s in series_defs_for(segment) if s["key"] == series)
 
@@ -344,87 +320,63 @@ else:
         else:
             row = sel.iloc[0]
 
-            # ---- Sidebar info & checkboxes & legend ----
             creds = sidebar_for_model(row, seg_label, ser_label)
 
-            # ---- Three compliance columns (NOW / 2026 / 2028 planned) ----
-            st.markdown("<div class='section-h'>NOW</div>", unsafe_allow_html=True)
-            c1, c2, c3 = st.columns(3, gap="large")
+            # ------------- Three columns (NOW | 2026 | 2028 planned) -------------
+            col_now, col_26, col_28 = st.columns(3, gap="large")
 
-            # Helper to render A1, A2, A3, Specific bricks for a given column/year
-            def render_column(col, year_label):
-                # Make badges from model features
-                rid_pill, geo_pill = label_remote_geo(row, year_label)
+            def render_year(col, year_label, title_text):
+                with col:
+                    st.markdown(f"<div class='colh'>{title_text}</div>", unsafe_allow_html=True)
+                    rid_pill, geo_pill = label_remote_geo(row, year_label)
 
-                # A1
-                with col:
-                    op_p, fly_p = operator_flyer_pills(not creds["op"], not creds["fly"])
-                    a1_chip = POSSIBLE_LABEL  # until both creds present
-                    if creds["op"] and creds["fly"]:
-                        a1_chip = "Allowed"
-                    brick(
-                        "A1 — Close to people",
-                        a1_summary(),
-                        [op_p, fly_p, rid_pill, geo_pill],
-                        top_chip=a1_chip
-                    )
-                # A2 (always not applicable with this dataset logic)
-                with col:
+                    # A1
+                    need_op = not creds["op"]
+                    need_fy = not creds["fly"]
+                    op_p, fy_p = operator_flyer_pills(need_op, need_fy)
+                    a1_status = "ok" if (creds["op"] and creds["fly"]) else "info"
+                    a1_chip   = "Allowed" if a1_status=="ok" else POSSIBLE_LABEL
+                    brick("A1 — Close to people", a1_summary(), [op_p, fy_p, rid_pill, geo_pill],
+                          status=a1_status, top_chip=a1_chip)
+
+                    # A2 — not applicable for these models (kept consistent)
                     brick(
                         "A2 — Close with A2 CofC",
                         a2_summary(),
                         [
                             pill("Operator ID: Required", "deny"),
                             pill("Flyer ID: Required", "deny"),
-                            pill("A2 CofC: N/A","info"),
+                            pill("A2 CofC: N/A", "info"),
                             rid_pill, geo_pill
                         ],
-                        top_chip="Not applicable"
+                        status="deny", top_chip="Not applicable"
                     )
-                # A3
-                with col:
-                    op_p, fly_p = operator_flyer_pills(not creds["op"], not creds["fly"])
-                    a3_chip = POSSIBLE_LABEL
-                    if creds["op"] and creds["fly"]:
-                        a3_chip = "Allowed"
-                    brick(
-                        "A3 — Far from people",
-                        a3_summary(),
-                        [op_p, fly_p, rid_pill, geo_pill],
-                        top_chip=a3_chip
-                    )
-                # Specific (OA/GVC path)
-                with col:
-                    spec_chip = "Available via OA/GVC"
-                    pills = [
-                        pill("Operator ID: Required", "deny" if not creds["op"] else "ok"),
-                        pill("Flyer ID: Required", "deny" if not creds["fly"] else "ok"),
-                        pill("GVC: Required", "deny" if not creds["gvc"] else "ok"),
-                        pill("OA: Required", "deny" if not creds["oa"] else "ok"),
+
+                    # A3
+                    op_p, fy_p = operator_flyer_pills(need_op, need_fy)
+                    a3_status = "ok" if (creds["op"] and creds["fly"]) else "info"
+                    a3_chip   = "Allowed" if a3_status=="ok" else POSSIBLE_LABEL
+                    brick("A3 — Far from people", a3_summary(), [op_p, fy_p, rid_pill, geo_pill],
+                          status=a3_status, top_chip=a3_chip)
+
+                    # Specific — OA/GVC
+                    spec_pills = [
+                        pill("Operator ID: Required", "ok" if creds["op"] else "deny"),
+                        pill("Flyer ID: Required",    "ok" if creds["fly"] else "deny"),
+                        pill("GVC: Required",         "ok" if creds["gvc"] else "deny"),
+                        pill("OA: Required",          "ok" if creds["oa"] else "deny"),
                         rid_pill, geo_pill
                     ]
-                    brick(
-                        "Specific — OA / GVC",
-                        spec_summary(),
-                        pills,
-                        top_chip=spec_chip
-                    )
+                    brick("Specific — OA / GVC", spec_summary(), spec_pills,
+                          status="warn", top_chip="Available via OA/GVC")
 
-            render_column(c1, "now")
-            st.markdown("<div class='section-h'>2026</div>", unsafe_allow_html=True)
-            c4, c5, c6 = st.columns(3, gap="large")
-            render_column(c4, "2026")
+            render_year(col_now, "now",  "NOW")
+            render_year(col_26, "2026", "2026")
+            render_year(col_28, "2028", "2028 (planned)")
 
-            st.markdown("<div class='section-h'>2028 (planned)</div>", unsafe_allow_html=True)
-            c7, c8, c9 = st.columns(3, gap="large")
-            render_column(c7, "2028")
-
-            # pad end
-            st.write("")
-            st.write("")
+            st.write(""); st.write("")
 
     if not model:
-        # Show grid for model selection
         models = models_for(segment, series)
         items = []
         for _, r in models.iterrows():
