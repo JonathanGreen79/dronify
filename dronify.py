@@ -234,6 +234,37 @@ def _parse_mtow_g(row) -> float | None:
         m = re.search(r"([\d\.]+)", s)
         return float(m.group(1)) if m else None
 
+# ---------------------------------------------------------------------
+# Rule text (kept simple; you can swap to jurisdiction-specific strings)
+# ---------------------------------------------------------------------
+def rule_text_a1():
+    return (
+        "Fly close to people; avoid assemblies/crowds. TOAL: sensible separation; "
+        "follow local restrictions."
+    )
+
+def rule_text_a2(year: int):
+    if year < 2026:
+        return (
+            "A2 mainly for C2 drones (sometimes C1 by nuance). Transitional (≤2 kg) "
+            "until Jan 2026: keep ≥50 m from uninvolved people."
+        )
+    return "C2/UK2: keep 30 m from uninvolved people (5 m in low-speed)."
+
+def rule_text_a3():
+    return (
+        "Keep ≥150 m from residential/commercial/industrial/recreational areas. "
+        "TOAL: well away from uninvolved people and built-up areas."
+    )
+
+def rule_text_specific():
+    return (
+        "Risk-assessed operations per OA; distances per ops manual. TOAL & "
+        "mitigations defined by your approved procedures (e.g., PDRA-01: ≥50 m in "
+        "flight; TOAL may be reduced to 30 m; no overflight of assemblies)."
+    )
+
+
 def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -> dict:
     """
     Hard gates for A1/A2/A3 so heavy aircraft never show A1.
@@ -623,3 +654,4 @@ else:
             f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
             unsafe_allow_html=True,
         )
+
