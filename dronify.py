@@ -30,7 +30,7 @@ def load_data():
         "marketing_name", "mtom_g_nominal", "eu_class_marking",
         "uk_class_marking", "remote_id_builtin", "year_released", "notes",
         "model_key",
-        # Newer spec fields used in the sidebar expanders:
+        # extra spec fields (for expanders)
         "operator_id_required", "spec_url",
         "sensor", "effective_mp", "aperture", "focal_length_eq",
         "video_resolutions", "log_profile",
@@ -74,6 +74,19 @@ SEGMENT_HERO = {
     "pro":       resolve_img("images/professional.jpg"),
     "enterprise":resolve_img("images/enterprise.jpg"),
 }
+
+# SAFE sidebar thumbnail resolver (prevents st.image with empty string)
+def sidebar_thumb_url(row, segment_key: str) -> str:
+    """
+    Returns a safe image URL for the sidebar:
+    - model image_url if present
+    - else segment hero image
+    - else empty string (caller should skip st.image)
+    """
+    model_img = resolve_img(str(row.get("image_url", "") or ""))
+    if model_img:
+        return model_img
+    return SEGMENT_HERO.get(segment_key, "") or ""
 
 # ---------- Helpers ----------
 def series_defs_for(segment_key: str):
@@ -245,9 +258,11 @@ else:
             back_qs = f"segment={segment}&series={series}"
             st.sidebar.markdown(f"<a class='sidebar-back' href='?{back_qs}' target='_self'>← Back to models</a>", unsafe_allow_html=True)
 
-            # Thumbnail
-            st.sidebar.image(resolve_img(row.get("image_url", "")),
-                             use_column_width=True, caption=row.get("marketing_name", ""))
+            # Thumbnail (safe)
+            thumb = sidebar_thumb_url(row, segment)
+            if thumb:
+                st.sidebar.image(thumb, use_column_width=True,
+                                 caption=row.get("marketing_name", ""))
 
             # Compliance badges & operator ID
             eu = row.get("eu_class_marking", row.get("class_marking", "—")) or "—"
