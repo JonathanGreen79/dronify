@@ -538,14 +538,16 @@ else:
         a_now = compute_bricks(row, creds, 2025, jurisdiction="UK")
         a_26  = compute_bricks(row, creds, 2026, jurisdiction="UK")
 
-        # ---------- HEADERS (Now | 2026–2027 bridge) ----------
+        # ---------- HEADERS AS FIRST GRID ROW (no fill/border) ----------
         st.markdown(
-            """
-<div class='grid2 divided' style='margin:4px 0 10px'>
-  <div><div class='hdrcell'>Now – 31 Dec 2025</div></div>
-  <div><div class='hdrcell'>1 Jan 2026 – 31 Dec 2027 (UK–EU bridge)</div></div>
-</div>
-""",
+            "<div class='grid2 divided' style='margin:0 0 8px 0;'>"
+            "<div style='text-align:center;font-weight:600;font-size:.95rem;color:#374151;margin-bottom:4px;'>"
+            "Now – 31 Dec 2025"
+            "</div>"
+            "<div style='text-align:center;font-weight:600;font-size:.95rem;color:#374151;margin-bottom:4px;'>"
+            "1 Jan 2026 – 31 Dec 2027 (UK–EU bridge)"
+            "</div>"
+            "</div>",
             unsafe_allow_html=True,
         )
 
