@@ -1,5 +1,6 @@
 # dronify.py — Navigation (stage 1/2/3) + robust image resolver + sidebar
 # + 3x4 compliance grid (Current / 2026 / 2028 × A1/A2/A3/Specific bricks)
+# Bricks now reflect tech compliance (Remote ID, Geo-awareness) from YAML.
 
 import random
 from pathlib import Path
@@ -131,6 +132,10 @@ def coalesce(*vals, default=""):
             return s
     return default
 
+def _to_int(x):
+    try: return int(str(x).strip())
+    except Exception: return None
+
 # ------------------------------- Styles -------------------------------
 
 st.markdown("""
@@ -169,7 +174,12 @@ st.markdown("""
 .badge-grey { background:#F3F4F6; color:#6B7280; }
 
 /* Bricks grid */
+.compliance-row { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+.col-box { padding-right: 16px; border-right: 1px solid #E5E7EB; }
+.col-box:last-child { border-right: none; padding-right: 0; }
+
 .col-title { font-weight:800; font-size:1.15rem; margin:0 0 .6rem 0; }
+
 .brick {
   border-radius: 14px; padding: 12px 12px 10px 12px; margin-bottom: 10px; border: 1px solid #E5E7EB;
   box-shadow: 0 4px 10px rgba(0,0,0,.04);
@@ -196,6 +206,14 @@ st.markdown("""
 .kv-red { background:#FEE2E2; color:#991B1B; }
 .kv-green { background:#DCFCE7; color:#14532D; }
 .kv-grey { background:#F3F4F6; color:#374151; }
+
+/* Legend */
+.legend { margin-top: 14px; display:flex; gap:10px; flex-wrap:wrap; color:#374151; font-size:.9rem; }
+.legend .chip { padding:4px 10px; border-radius:999px; font-weight:700; }
+.legend .ok   { background:#22C55E; color:white; }
+.legend .info { background:#2563EB; color:white; }
+.legend .warn { background:#D97706; color:white; }
+.legend .na   { background:#9CA3AF; color:white; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -215,19 +233,74 @@ def render_two_rows(title: str, items: list[str]):
 
 # ------------------------------- Compliance bricks -------------------------------
 
-def _to_int(x):
-    try: return int(str(x).strip())
-    except Exception: return None
+def _is_c0(eu_cls: str, weight: int | None) -> bool:
+    e = (eu_cls or "").strip().upper()
+    return (e == "C0") or (weight is not None and weight < 250)
+
+def _a2_applicable(eu_cls: str) -> bool:
+    # Conservative: mainly C2. You may expand to ("C1","C2") if desired.
+    e = (eu_cls or "").strip().upper()
+    return e == "C2"
+
+def _era_requirements(row: pd.Series, era: str):
+    """Return (oper, flyer, rid_required, rid_has, rid_unknown, geo_required, geo_has, geo_unknown)"""
+    weight = _to_int(row.get("mtom_g_nominal"))
+    has_cam = str(row.get("has_camera", "")).strip().lower() == "yes"
+
+    rid_val = str(row.get("remote_id_builtin", "unknown")).strip().lower()
+    geo_val = str(row.get("geo_awareness", "unknown")).strip().lower()
+
+    rid_has = (rid_val == "yes")
+    rid_unknown = (rid_val == "unknown")
+
+    geo_has = (geo_val == "yes")
+    geo_unknown = (geo_val == "unknown")
+
+    # Operator ID: camera => required (all eras)
+    oper = has_cam
+
+    # Flyer ID:
+    if era == "current":
+        flyer = has_cam or (weight is not None and weight >= 250)
+    else:
+        flyer = has_cam and (weight is not None and weight > 100)
+
+    # Remote ID requirement per era
+    if era == "current":
+        rid_required = False  # modern drones often have it; not mandated for all legacy today
+    else:
+        rid_required = True
+
+    # Geo-awareness requirement per era
+    if era == "current":
+        geo_required = False
+    elif era == "2026":
+        geo_required = True
+    else:  # 2028 (planned)
+        geo_required = has_cam and (weight is not None and weight >= 100)
+
+    return oper, flyer, rid_required, rid_has, rid_unknown, geo_required, geo_has, geo_unknown
+
+def _badge_state(required: bool, has_it: bool, unknown: bool, label: str) -> tuple[str, str]:
+    """Return (badge_html, tone_component) where tone_component in {'ok','warn','na'}."""
+    if unknown:
+        return (f"<span class='kv-pill kv-grey'>{label}: Unknown</span>", "na")
+    if required:
+        if has_it:
+            return (f"<span class='kv-pill kv-green'>{label}: OK</span>", "ok")
+        else:
+            return (f"<span class='kv-pill kv-red'>{label}: Required</span>", "warn")
+    # not required:
+    if has_it:
+        return (f"<span class='kv-pill kv-green'>{label}: Onboard</span>", "ok")
+    else:
+        return (f"<span class='kv-pill kv-grey'>{label}: Not required</span>", "ok")
 
 def _badge_required(needed: bool, label: str):
     return f"<span class='kv-pill {'kv-red' if needed else 'kv-green'}'>{label}: {'Required' if needed else 'Not required'}</span>"
 
-def _badge_unknown(label: str):
-    return f"<span class='kv-pill kv-grey'>{label}: Unknown</span>"
-
 def _brick(title: str, status: str, tone: str, separation: str, toel: str,
            quals: list[str], tech: list[str]) -> str:
-    # tone: ok/info/warn/na -> for background; status chip: b-*
     tone_cls = {"ok":"brick-ok","info":"brick-info","warn":"brick-warn","na":"brick-na"}.get(tone,"brick-na")
     chip_cls = {"ok":"b-ok","info":"b-info","warn":"b-warn","na":"b-na"}.get(tone,"b-na")
     quals_html = " ".join(quals)
@@ -245,76 +318,42 @@ def _brick(title: str, status: str, tone: str, separation: str, toel: str,
     </div>
     """
 
-def _is_c0(eu_cls: str, weight: int | None) -> bool:
-    e = (eu_cls or "").strip().upper()
-    return (e == "C0") or (weight is not None and weight < 250)
-
-def _a2_applicable(eu_cls: str) -> bool:
-    e = (eu_cls or "").strip().upper()
-    return e == "C2"  # keep conservative; C1 edge-cases omitted by design
-
-def _era_requirements(row: pd.Series, era: str):
-    """Return booleans for Operator ID, Flyer ID, Remote ID, Geo per era."""
-    weight = _to_int(row.get("mtom_g_nominal"))
-    has_cam = str(row.get("has_camera", "")).strip().lower() == "yes"
-    rid_builtin = str(row.get("remote_id_builtin", "unknown")).strip().lower()
-    geo_cap     = str(row.get("geo_awareness", "unknown")).strip().lower()
-
-    # Operator ID: camera => required (all eras)
-    oper = has_cam
-
-    # Flyer ID:
-    if era == "current":
-        flyer = (weight is not None and weight >= 250) or has_cam  # pragmatic: camera implies Flyer ID
-    else:
-        flyer = has_cam and (weight is not None and weight > 100)
-
-    # Remote ID:
-    if era == "current":
-        rid_req = (rid_builtin == "yes")  # many modern drones have it; nudge to check
-        rid_unknown = (rid_builtin == "unknown")
-    else:
-        # 2026/2028 tightening: treat as required for planning clarity
-        rid_req = True
-        rid_unknown = False
-
-    # Geo-awareness:
-    if era == "current":
-        geo_req = (geo_cap == "yes")
-        geo_unknown = (geo_cap == "unknown")
-    elif era == "2026":
-        geo_req = True  # UK1–UK3 era; keep simple
-        geo_unknown = False
-    else:  # 2028 (planned)
-        # planned: UK0 >=100g + camera also needs geo
-        geo_req = has_cam and (weight is not None and weight >= 100)
-        geo_unknown = False
-
-    return oper, flyer, (rid_req, rid_unknown), (geo_req, geo_unknown)
+def _combine_tone(base: str, tech_tones: list[str]) -> str:
+    """Escalate tone if any tech check fails. Priority: ok < info < warn < na"""
+    order = {"ok":0, "info":1, "warn":2, "na":3}
+    t = base
+    for tt in tech_tones:
+        if order.get(tt,0) > order.get(t,0):
+            t = tt
+    return t
 
 def _brick_sets(row: pd.Series, era: str):
-    """Build A1/A2/A3/Specific bricks for a given era."""
+    """Build A1/A2/A3/Specific bricks for a given era, adjusting tone by tech compliance."""
     eu = coalesce(row.get("eu_class_marking"), row.get("class_marking")).upper()
     weight = _to_int(row.get("mtom_g_nominal"))
     is_c0 = _is_c0(eu, weight)
     a2_ok = _a2_applicable(eu)
 
-    oper, flyer, (rid_req, rid_unknown), (geo_req, geo_unknown) = _era_requirements(row, era)
+    oper, flyer, rid_req, rid_has, rid_unknown, geo_req, geo_has, geo_unknown = _era_requirements(row, era)
 
-    # Common badge fragments
     op_b   = _badge_required(oper, "Operator ID")
     fly_b  = _badge_required(flyer, "Flyer ID (basic test)")
-    rid_b  = _badge_unknown("Remote ID") if rid_unknown else _badge_required(rid_req, "Remote ID")
-    geo_b  = _badge_unknown("Geo-awareness") if geo_unknown else _badge_required(geo_req, "Geo-awareness")
+
+    rid_b, rid_tone   = _badge_state(rid_req, rid_has, rid_unknown, "Remote ID")
+    geo_b, geo_tone   = _badge_state(geo_req, geo_has, geo_unknown, "Geo-awareness")
+
+    tech_tones = [rid_tone, geo_tone]
 
     bricks = []
 
     # A1
     if is_c0 or eu == "C1":
+        base_tone = "ok"
+        tone = _combine_tone(base_tone, tech_tones)
         bricks.append(_brick(
             "A1 — Close to people",
             "Allowed",
-            "ok",
+            tone,
             "Fly close to people; avoid assemblies/crowds.",
             "TOAL: sensible separation; follow local restrictions.",
             [op_b, fly_b], [rid_b, geo_b]
@@ -331,10 +370,12 @@ def _brick_sets(row: pd.Series, era: str):
 
     # A2
     if a2_ok:
+        base_tone = "info"
+        tone = _combine_tone(base_tone, tech_tones)
         bricks.append(_brick(
             "A2 — Close with A2 CofC",
             "Allowed with A2 CofC",
-            "info",
+            tone,
             "Keep ≥ 50 m from uninvolved people.",
             "TOAL: safe distance; follow manufacturer guidance.",
             [op_b, fly_b, "<span class='kv-pill kv-red'>A2 CofC: Required</span>"],
@@ -352,20 +393,24 @@ def _brick_sets(row: pd.Series, era: str):
         ))
 
     # A3
+    base_tone = "info"
+    tone = _combine_tone(base_tone, tech_tones)
     bricks.append(_brick(
         "A3 — Far from people",
         "Allowed",
-        "info",
+        tone,
         "Keep ≥ 150 m from residential/commercial/recreational areas.",
         "TOAL: well away from uninvolved people and built-up areas.",
         [op_b, fly_b], [rid_b, geo_b]
     ))
 
     # Specific
+    base_tone = "warn"
+    tone = _combine_tone(base_tone, tech_tones)
     bricks.append(_brick(
         "Specific — OA / GVC",
         "Available via OA/GVC",
-        "warn",
+        tone,
         "Risk-assessed operations per OA; distances per ops manual.",
         "TOAL & mitigations defined by your approved procedures.",
         [op_b, fly_b, "<span class='kv-pill kv-red'>GVC: Required</span>", "<span class='kv-pill kv-red'>OA: Required</span>"],
@@ -375,16 +420,31 @@ def _brick_sets(row: pd.Series, era: str):
     return "\n".join(bricks)
 
 def render_compliance_grid(row: pd.Series):
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown("<div class='col-title'>Current</div>", unsafe_allow_html=True)
-        st.markdown(_brick_sets(row, "current"), unsafe_allow_html=True)
-    with c2:
-        st.markdown("<div class='col-title'>2026</div>", unsafe_allow_html=True)
-        st.markdown(_brick_sets(row, "2026"), unsafe_allow_html=True)
-    with c3:
-        st.markdown("<div class='col-title'>2028 (planned)</div>", unsafe_allow_html=True)
-        st.markdown(_brick_sets(row, "2028"), unsafe_allow_html=True)
+    # Render grid with headers + vertical dividers + legend
+    col_html = f"""
+    <div class='compliance-row'>
+      <div class='col-box'>
+        <div class='col-title'>Current</div>
+        {_brick_sets(row, "current")}
+      </div>
+      <div class='col-box'>
+        <div class='col-title'>2026</div>
+        {_brick_sets(row, "2026")}
+      </div>
+      <div class='col-box'>
+        <div class='col-title'>2028 (planned)</div>
+        {_brick_sets(row, "2028")}
+      </div>
+    </div>
+    <div class='legend'>
+      <span>Legend:</span>
+      <span class='chip ok'>Allowed</span>
+      <span class='chip info'>Allowed with additional conditions (e.g., A2 CofC)</span>
+      <span class='chip warn'>Available with caveats / tech shortfall to resolve</span>
+      <span class='chip na'>Not applicable</span>
+    </div>
+    """
+    st.markdown(col_html, unsafe_allow_html=True)
 
 # ------------------------------- UI flow -------------------------------
 
@@ -454,7 +514,7 @@ else:
                 unsafe_allow_html=True
             )
 
-            # Main body — 3×4 bricks
+            # Main body — 3×4 bricks with headers, dividers, legend
             render_compliance_grid(row)
 
         else:
