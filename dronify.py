@@ -513,7 +513,7 @@ else:
         have_a2   = st.sidebar.checkbox("A2 CofC", value=False, key="c_a2")
         have_gvc  = st.sidebar.checkbox("GVC", value=False, key="c_gvc")
         have_oa   = st.sidebar.checkbox("OA (Operational Authorisation)", value=False, key="c_oa")
-        creds = dict(op=have_op, flyer=have_fl, a1a3=have_a1a3, a2=have_a2, gvc=have_gvc, oa=have_oa)
+        creds = dict(op=have_op, flyer=have_fl, a2=have_a2, gvc=have_gvc, oa=have_oa)
 
         # --------- Compute all bricks (UK by default) ---------
         a_now = compute_bricks(row, creds, 2025, jurisdiction="UK")
@@ -596,5 +596,6 @@ else:
             f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
             unsafe_allow_html=True,
         )
+
 
 
