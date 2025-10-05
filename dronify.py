@@ -1,10 +1,10 @@
-# dronify.py  (or streamlit_app.py)
 import streamlit as st
 import pandas as pd
 import yaml
 from pathlib import Path
+from math import ceil
 
-st.set_page_config(page_title="Drone Picker — Vertical L/R + Single-Row Models", layout="wide")
+st.set_page_config(page_title="Drone Picker — L/R + Single Row", layout="wide")
 
 DATASET_PATH = Path("dji_drones_v2.yaml")
 TAXONOMY_PATH = Path("taxonomy.yaml")
@@ -16,9 +16,9 @@ def load_yaml(path: Path):
 
 @st.cache_data
 def load_data():
-    dataset = load_yaml(DATASET_PATH)        # expects {"schema":{...}, "data":[...]}
+    dataset = load_yaml(DATASET_PATH)        # {"schema": {...}, "data": [ ... ]}
     df = pd.DataFrame(dataset["data"])
-    taxonomy = load_yaml(TAXONOMY_PATH)      # expects {"segments":[...]}
+    taxonomy = load_yaml(TAXONOMY_PATH)      # {"segments": [ ... ]}
     if "eu_class_marking" not in df.columns:
         df["eu_class_marking"] = df.get("class_marking", "unknown")
     if "uk_class_marking" not in df.columns:
@@ -33,43 +33,33 @@ if "segments" not in taxonomy:
 # ---------- Styles ----------
 st.markdown("""
 <style>
-/* Pretty buttons like cards */
+/* make buttons look like clean cards */
 .stButton > button {
   width: 100%;
-  text-align: left;
+  text-align: center;
   border: 1px solid #E5E7EB;
   background: #ffffff;
   border-radius: 14px;
-  padding: 12px 14px;
-  font-size: 0.98rem;
+  padding: 10px 12px;
+  font-size: 0.95rem;
   line-height: 1.2;
   transition: all .15s ease-in-out;
   margin-bottom: 8px;
 }
 .stButton > button:hover { border-color:#D1D5DB; box-shadow:0 4px 16px rgba(0,0,0,0.06); }
 
-/* Titles */
 .row-title { font-weight:600; margin: 4px 0 8px 0; font-size:.92rem; color:#374151; }
 
-/* Horizontal scroller for models (single row) */
-.hscroll {
-  overflow-x: auto; overflow-y: hidden; white-space: nowrap;
-  padding: 6px 2px; margin-top: 12px; margin-bottom: 10px; 
-}
-.hscroll .pill {
-  display: inline-block;
-  border: 1px solid #E5E7EB;
-  background: #FFF;
+/* model pills row (single horizontal row) */
+.model-row { display: flex; gap: 8px; overflow-x: auto; padding: 6px 2px; }
+.model-row .stButton>button {
   border-radius: 999px;
-  padding: 10px 14px;
-  margin-right: 8px;
-  font-size: 0.92rem;
-  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  white-space: nowrap;
 }
-.hscroll .pill:hover { border-color:#D1D5DB; box-shadow:0 2px 10px rgba(0,0,0,.05); }
-.hscroll .pill .sub { display:block; font-size:.75rem; color:#6B7280; margin-top:2px; }
 
-/* Summary boxes */
+/* summary boxes */
 .summary { border:1px solid #E5E7EB; border-radius:12px; padding:12px; background:#FFF; }
 .summary .lab { font-size:.78rem; color:#6B7280; margin-bottom:4px; }
 .summary .val { font-size:1.05rem; font-weight:600; }
@@ -83,24 +73,23 @@ ss.setdefault("series", None)
 ss.setdefault("model_key", None)
 
 # ---------- Helpers ----------
-def nonempty_series_for(segment_key: str):
+def series_defs_for(segment_key: str):
     seg = next(seg for seg in taxonomy["segments"] if seg["key"] == segment_key)
-    keys = [s["key"] for s in seg["series"]]
-    return [k for k in keys if not df[(df["segment"] == segment_key) & (df["series"] == k)].empty]
+    # keep only series that have at least one model
+    defs = []
+    for s in seg["series"]:
+        if not df[(df["segment"] == segment_key) & (df["series"] == s["key"])].empty:
+            defs.append(s)
+    return defs
 
 def models_for(segment_key: str, series_key: str) -> pd.DataFrame:
-    return df[(df["segment"] == segment_key) & (df["series"] == series_key)]
+    return df[(df["segment"] == segment_key) & (df["series"] == series_key)].sort_values("marketing_name")
 
-def series_label(seg_key: str, series_key: str) -> str:
-    seg = next(s for s in taxonomy["segments"] if s["key"] == seg_key)
-    sdef = next(s for s in seg["series"] if s["key"] == series_key)
-    return sdef["label"]
-
-# ---------- Layout: top row = two columns (left: Step 1, right: Step 2) ----------
+# ---------- Top row: Step 1 (left) & Step 2 (right as two columns) ----------
 left, right = st.columns(2, gap="large")
 
 with left:
-    st.markdown('<div class="row-title">Step 1 · Select group</div>', unsafe_allow_html=True)
+    st.markdown('<div class="row-title">Step 1 • Select group</div>', unsafe_allow_html=True)
     for seg in taxonomy["segments"]:
         if st.button(seg["label"], key=f"segment_{seg['key']}", use_container_width=True):
             ss.segment = seg["key"]
@@ -108,68 +97,56 @@ with left:
             ss.model_key = None
 
 with right:
-    st.markdown('<div class="row-title">Step 2 · Select series</div>', unsafe_allow_html=True)
+    st.markdown('<div class="row-title">Step 2 • Select series</div>', unsafe_allow_html=True)
     if ss.segment:
-        for s_key in nonempty_series_for(ss.segment):
-            label = series_label(ss.segment, s_key)
-            if st.button(label, key=f"series_{s_key}", use_container_width=True):
-                ss.series = s_key
-                ss.model_key = None
+        sdefs = series_defs_for(ss.segment)
+        # lay them out in 2 vertical columns
+        c1, c2 = st.columns(2)
+        mid = ceil(len(sdefs) / 2)
+        with c1:
+            for s in sdefs[:mid]:
+                if st.button(s["label"], key=f"series_{s['key']}", use_container_width=True):
+                    ss.series = s["key"]
+                    ss.model_key = None
+        with c2:
+            for s in sdefs[mid:]:
+                if st.button(s["label"], key=f"series_{s['key']}", use_container_width=True):
+                    ss.series = s["key"]
+                    ss.model_key = None
     else:
         st.info("Pick a group on the left.")
 
 st.markdown("---")
 
-# ---------- Models row (single horizontal strip) ----------
-st.markdown('<div class="row-title">Step 3 · Select model</div>', unsafe_allow_html=True)
+# ---------- Step 3: one-row model pills ----------
+st.markdown('<div class="row-title">Step 3 • Select model</div>', unsafe_allow_html=True)
 if ss.segment and ss.series:
-    models = models_for(ss.segment, ss.series).sort_values("marketing_name")
+    models = models_for(ss.segment, ss.series)
     if models.empty:
         st.info("No models in this series yet.")
     else:
-        # Build clickable pills in a horizontal scroller
-        pills_html = ['<div class="hscroll">']
+        # container that becomes a single horizontal row
+        model_row = st.container()
+        model_row.markdown('<div class="model-row">', unsafe_allow_html=True)
+        # use a tiny grid of buttons; CSS above makes them inline and scrollable horizontally
+        # put all buttons in the same container so they render side-by-side
         for _, row in models.iterrows():
-            title = row["marketing_name"]
-            subbits = []
+            label_bits = [row["marketing_name"]]
+            sub = []
             if isinstance(row.get("class_marking"), str):
-                subbits.append(f"Class: {row.get('class_marking','unknown')}")
+                sub.append(f"Class: {row.get('class_marking','unknown')}")
             if isinstance(row.get("weight_band"), str):
-                subbits.append(f"Weight: {row.get('weight_band','?')}")
-            sub = " • ".join(subbits)
-            # Each pill triggers a unique form submit
-            pills_html.append(
-                f'''
-                <form action="" method="post" style="display:inline;">
-                  <button class="pill" name="select_model" value="{row['model_key']}">
-                    {title}<span class="sub">{sub}</span>
-                  </button>
-                </form>
-                '''
-            )
-        pills_html.append("</div>")
-        st.markdown("\n".join(pills_html), unsafe_allow_html=True)
-
-        # Handle selection (works in Streamlit via query param hack using forms + on rerun read from request)
-        # Simpler: use st.experimental_get_query_params()/set; but HTML forms won't set those.
-        # Use an alternative: invisible buttons—however Streamlit doesn't capture HTML form posts.
-        # So also render invisible Streamlit buttons for each model to actually capture clicks:
-        # (Users click the visible pill; also show small invisible st.button stacked to capture)
-        # Practical approach: render Streamlit buttons under the hood.
-        btn_cols = st.columns(len(models))
-        for i, (_, row) in enumerate(models.iterrows()):
-            with btn_cols[i]:
-                if st.button(" ", key=f"hidden_{row['model_key']}"):
-                    ss.model_key = row["model_key"]
-        # Tip for users:
-        st.caption("Tip: Scroll sideways if you can’t see all models.")
-
+                sub.append(f"Weight: {row.get('weight_band','?')}")
+            label = f"{label_bits[0]}  ·  {' • '.join(sub)}" if sub else label_bits[0]
+            if st.button(label, key=f"model_{row['model_key']}"):
+                ss.model_key = row["model_key"]
+        model_row.markdown('</div>', unsafe_allow_html=True)
 else:
     st.info("Choose a group and series to see models.")
 
 st.markdown("---")
 
-# ---------- Summary boxes ----------
+# ---------- Summary ----------
 if ss.model_key:
     sel = df[df["model_key"] == ss.model_key].iloc[0]
     c1, c2, c3, c4 = st.columns(4)
@@ -184,4 +161,4 @@ if ss.model_key:
         uk = sel.get("uk_class_marking", sel.get("class_marking","unknown"))
         st.markdown(f'<div class="summary"><div class="lab">EU / UK Class</div><div class="val">{eu} / {uk}</div></div>', unsafe_allow_html=True)
 
-st.caption("Layout: Step 1 (left) • Step 2 (right) • Models in a single horizontal row, then summary.")
+st.caption("Step 1 (left) · Step 2 (right with two columns) · Models as one-row pills. No more raw HTML; pure Streamlit buttons.")
