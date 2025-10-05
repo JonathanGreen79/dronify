@@ -1,4 +1,4 @@
-# dronify.py — UI + compliance board (fixed 3-column layout + coloured bricks)
+# dronify.py — UI + compliance board (3 columns + hover tooltips on Operator/Flyer ID)
 
 import random
 from pathlib import Path
@@ -190,8 +190,9 @@ def chip(text, color="info"):
     return f"<span class='pill {color} chip'>{text}</span>"
 
 def brick(title, summary, pills, status="info", top_chip=None):
-    # status maps to .brick class and chip colour
-    chip_color = "ok" if top_chip == "Allowed" else ("warn" if top_chip == "Available via OA/GVC" else ("deny" if top_chip == "Not applicable" else "info"))
+    chip_color = "ok" if top_chip == "Allowed" \
+        else ("warn" if top_chip == "Available via OA/GVC" \
+        else ("deny" if top_chip == "Not applicable" else "info"))
     chip_html = chip(top_chip, chip_color) if top_chip else ""
     st.markdown(
         f"""
@@ -216,12 +217,16 @@ def label_remote_geo(row, year):
     if year == "now":
         rid_ok = rid_ok_now
     elif year == "2026":
-        rid_ok = rid_ok_now  # new UK classes require RID, we can only display onboard capability
+        rid_ok = rid_ok_now
     else:  # 2028 planned
         rid_ok = rid_ok_now if (mtom >= 100 and cam) else rid_ok_now
 
-    rid_pill  = pill("Remote ID: OK" if rid_ok else "Remote ID: Required", "ok" if rid_ok else "deny")
-    geo_pill  = pill("Geo-awareness: Onboard" if geo_ok else "Geo-awareness: Required", "ok" if geo_ok else "deny")
+    rid_pill  = pill("Remote ID: OK" if rid_ok else "Remote ID: Required",
+                     "ok" if rid_ok else "deny",
+                     tooltip="Direct Remote ID capability on the aircraft.")
+    geo_pill  = pill("Geo-awareness: Onboard" if geo_ok else "Geo-awareness: Required",
+                     "ok" if geo_ok else "deny",
+                     tooltip="Geo-awareness / no-fly zone awareness on the aircraft.")
     return rid_pill, geo_pill
 
 def a1_summary():
@@ -236,9 +241,52 @@ def a2_summary():
 def spec_summary():
     return "Risk-assessed operations per OA; distances per ops manual. TOAL & mitigations defined by your approved procedures."
 
-def operator_flyer_pills(need_op, need_fly):
-    op = pill("Operator ID: Required", "deny") if need_op else pill("Operator ID: Have", "ok")
-    fy = pill("Flyer ID: Required", "deny")    if need_fly else pill("Flyer ID: Have", "ok")
+# ---- NEW: tooltipped Operator/Flyer pills
+def operator_flyer_pills(row, year, need_op, need_fly):
+    """
+    Returns (operator_pill, flyer_pill) with year/camera-aware tooltips.
+    """
+    cam = has_yes(row.get("has_camera"))
+    mtom = float(row.get("mtom_g_nominal") or 0)
+
+    op_tt = (
+        "Operator ID: registration for the person/organisation responsible for the drone. "
+        "Must be displayed on the aircraft (UK CAA)."
+    )
+
+    # Flyer ID tooltip explains current rule + reason for sub-250 g with camera
+    if cam:
+        base_reason = "This model has a camera, so a Flyer ID is required."
+    else:
+        base_reason = "Models ≥250 g generally need a Flyer ID; toys without cameras may be exempt."
+
+    if year == "now":
+        flyer_tt = (
+            "Flyer ID: online theory test for the remote pilot. In the UK, a Flyer ID "
+            "is required for anyone flying a drone with a camera or ≥250 g. "
+            + base_reason
+        )
+    elif year == "2026":
+        flyer_tt = (
+            "Flyer ID: required for most flying in the Open category. UK changes (2026): "
+            "applies to camera drones >100 g. "
+            + base_reason
+        )
+    else:  # 2028
+        flyer_tt = (
+            "Flyer ID: required for most flying in the Open category. From 2028, legacy "
+            "rules extend Remote ID to some older camera drones ≥100 g. "
+            + base_reason
+        )
+
+    op = pill("Operator ID: Required" if need_op else "Operator ID: Have",
+              "deny" if need_op else "ok",
+              tooltip=op_tt)
+
+    fy = pill("Flyer ID: Required" if need_fly else "Flyer ID: Have",
+              "deny" if need_fly else "ok",
+              tooltip=flyer_tt)
+
     return op, fy
 
 # -------------------- Sidebar: details / controls / legend --------------------
@@ -333,27 +381,27 @@ else:
                     # A1
                     need_op = not creds["op"]
                     need_fy = not creds["fly"]
-                    op_p, fy_p = operator_flyer_pills(need_op, need_fy)
+                    op_p, fy_p = operator_flyer_pills(row, year_label, need_op, need_fy)
                     a1_status = "ok" if (creds["op"] and creds["fly"]) else "info"
                     a1_chip   = "Allowed" if a1_status=="ok" else POSSIBLE_LABEL
                     brick("A1 — Close to people", a1_summary(), [op_p, fy_p, rid_pill, geo_pill],
                           status=a1_status, top_chip=a1_chip)
 
-                    # A2 — not applicable for these models (kept consistent)
+                    # A2 — not applicable for these models
+                    a2_op, a2_fy = operator_flyer_pills(row, year_label, True, True)
                     brick(
                         "A2 — Close with A2 CofC",
                         a2_summary(),
                         [
-                            pill("Operator ID: Required", "deny"),
-                            pill("Flyer ID: Required", "deny"),
-                            pill("A2 CofC: N/A", "info"),
+                            a2_op, a2_fy,
+                            pill("A2 CofC: N/A", "info", tooltip="These models are not operated under A2 in this view."),
                             rid_pill, geo_pill
                         ],
                         status="deny", top_chip="Not applicable"
                     )
 
                     # A3
-                    op_p, fy_p = operator_flyer_pills(need_op, need_fy)
+                    op_p, fy_p = operator_flyer_pills(row, year_label, need_op, need_fy)
                     a3_status = "ok" if (creds["op"] and creds["fly"]) else "info"
                     a3_chip   = "Allowed" if a3_status=="ok" else POSSIBLE_LABEL
                     brick("A3 — Far from people", a3_summary(), [op_p, fy_p, rid_pill, geo_pill],
@@ -361,10 +409,14 @@ else:
 
                     # Specific — OA/GVC
                     spec_pills = [
-                        pill("Operator ID: Required", "ok" if creds["op"] else "deny"),
-                        pill("Flyer ID: Required",    "ok" if creds["fly"] else "deny"),
-                        pill("GVC: Required",         "ok" if creds["gvc"] else "deny"),
-                        pill("OA: Required",          "ok" if creds["oa"] else "deny"),
+                        pill("Operator ID: Required", "ok" if creds["op"] else "deny",
+                             tooltip="Operator registration (UK CAA). Must be displayed on the drone."),
+                        pill("Flyer ID: Required", "ok" if creds["fly"] else "deny",
+                             tooltip="Flyer ID (pilot theory test). Needed for camera drones and most ≥250 g."),
+                        pill("GVC: Required", "ok" if creds["gvc"] else "deny",
+                             tooltip="General VLOS Certificate (GVC) for Specific category with OA."),
+                        pill("OA: Required",  "ok" if creds["oa"] else "deny",
+                             tooltip="Operational Authorisation by the CAA for your organisation."),
                         rid_pill, geo_pill
                     ]
                     brick("Specific — OA / GVC", spec_summary(), spec_pills,
