@@ -12,6 +12,21 @@ TAXONOMY_PATH = Path("taxonomy.yaml")
 
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
+def _restart_app():
+    # Clear query params for both new/old Streamlit APIs
+    try:
+        st.query_params.clear()
+    except Exception:
+        st.experimental_set_query_params()
+    # Clear any widget/session state and re-run
+    st.session_state.clear()
+    st.rerun()
+
+st.sidebar.markdown("### Navigation")
+if st.sidebar.button("Restart", key="restart_btn"):
+    _restart_app()
+
+
 # ---------------------------------------------------------------------
 # Data helpers
 # ---------------------------------------------------------------------
@@ -501,17 +516,6 @@ def render_row(title: str, items: list[str]):
     )
 
 # ---------------------------------------------------------------------
-# Restart helper
-# ---------------------------------------------------------------------
-def restart_app():
-    # Clear query params and rerun to stage 1
-    try:
-        st.query_params.clear()       # Streamlit ≥1.32
-    except Exception:
-        st.experimental_set_query_params()
-    st.rerun()
-
-# ---------------------------------------------------------------------
 # PAGE FLOW
 # ---------------------------------------------------------------------
 if not segment:
@@ -545,10 +549,6 @@ else:
     # Stage 3: models grid and detail view
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     ser_label = next(s["label"] for s in series_defs_for(segment) if s["key"] == series)
-
-    # Sidebar "Restart" (replaces the "<- Back to models" link)
-    if st.sidebar.button("Restart"):
-        restart_app()
 
     if model:
         sel = df[df["model_key"] == model]
@@ -684,3 +684,4 @@ else:
             f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
             unsafe_allow_html=True,
         )
+
