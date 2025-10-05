@@ -235,7 +235,7 @@ def _parse_mtow_g(row) -> float | None:
         return float(m.group(1)) if m else None
 
 # ---------------------------------------------------------------------
-# Rule text (kept simple; you can swap to jurisdiction-specific strings)
+# Rule text
 # ---------------------------------------------------------------------
 def rule_text_a1():
     return (
@@ -264,7 +264,9 @@ def rule_text_specific():
         "flight; TOAL may be reduced to 30 m; no overflight of assemblies)."
     )
 
-
+# ---------------------------------------------------------------------
+# Eligibility gating (A1/A2/A3)
+# ---------------------------------------------------------------------
 def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -> dict:
     """
     Hard gates for A1/A2/A3 so heavy aircraft never show A1.
@@ -287,15 +289,16 @@ def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -
         a1 = True
     if uk in {"uk0", "uk1"}:
         a1 = True
-    # C1/C0 -> A1 bridge only in 2026–2027
+    # C0/C1 bridge 2026–2027
     if bridge and year >= 2026 and eu in {"c0","c1"}:
         a1 = True
 
-    # --- A2 (Near people)  -> C2/UK2 only; legacy ≤2 kg pre-2026 if UNCLASSED
+    # --- A2 (Near people)
     a2 = False
     if uk == "uk2" or (bridge and eu == "c2"):
         if mtow is None or mtow <= 4000:
             a2 = True
+    # legacy (unclassed) transitional ≤2 kg before 2026
     if (jurisdiction.upper() == "UK" and year < 2026 and not is_classed
         and mtow is not None and mtow <= 2000):
         a2 = True
@@ -309,11 +312,14 @@ def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -
 
     return {"a1": a1, "a2": a2, "a3": a3}
 
+# ---------------------------------------------------------------------
+# Remote ID (UK timeline logic)
+# ---------------------------------------------------------------------
 def rid_is_required(row: pd.Series, year: int, jurisdiction: str = "UK") -> bool:
     """
     UK view:
       - ≤2025: not required.
-      - 2026–2027: required for new UK classes UK1/UK2/UK3/UK5/UK6 (bridge C1–C3).
+      - 2026–2027: required for new UK1/UK2/UK3/UK5/UK6 (bridge C1–C3).
       - ≥2028: required for all camera drones >100 g.
     """
     has_cam = yesish(row.get("has_camera", "yes"))
@@ -344,6 +350,10 @@ def rid_pill(row: pd.Series, year: int, rid_ok: bool, jurisdiction: str = "UK") 
         return pill_ok("Remote ID: Required (Onboard)") if rid_ok else pill_need("Remote ID: Required")
     else:
         return pill_ok("Remote ID: Not required (Onboard)") if rid_ok else pill_info("Remote ID: Not required")
+
+# Decide if every pill is OK using class, not the word “Required”
+def pills_all_ok(pills: list[str]) -> bool:
+    return all("pill-need" not in p for p in pills)
 
 # ---------------------------------------------------------------------
 # Compute bricks (uses gates + RID logic)
@@ -393,7 +403,7 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
         pills_a1.append(rid_pill(row, year, rid_ok, jurisdiction))
         pills_a1.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
 
-        a1_all_ok = all(("Required" not in x) for x in pills_a1)
+        a1_all_ok = pills_all_ok(pills_a1)
         a1_kind   = "allowed" if a1_all_ok else "possible"
         a1_badge  = badge("Allowed" if a1_kind == "allowed" else "Possible (additional requirements)", a1_kind)
         a1_body   = f"<div class='small'>{rule_text_a1()}</div><div>{''.join(pills_a1)}</div>"
@@ -416,7 +426,7 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
         pills_a2.append(rid_pill(row, year, rid_ok, jurisdiction))
         pills_a2.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
 
-        a2_all_ok = all(("Required" not in x) for x in pills_a2)
+        a2_all_ok = pills_all_ok(pills_a2)
         a2_kind   = "allowed" if a2_all_ok else "possible"
         a2_badge  = badge("Allowed" if a2_kind == "allowed" else "Possible (additional requirements)", a2_kind)
         a2_body   = f"<div class='small'>{rule_text_a2(year)}</div><div>{''.join(pills_a2)}</div>"
@@ -438,7 +448,7 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
         pills_a3.append(rid_pill(row, year, rid_ok, jurisdiction))
         pills_a3.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
 
-        a3_all_ok = all(("Required" not in x) for x in pills_a3)
+        a3_all_ok = pills_all_ok(pills_a3)
         a3_kind   = "allowed" if a3_all_ok else "possible"
         a3_badge  = badge("Allowed" if a3_kind == "allowed" else "Possible (additional requirements)", a3_kind)
         a3_body   = f"<div class='small'>{rule_text_a3()}</div><div>{''.join(pills_a3)}</div>"
@@ -453,7 +463,7 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
     pills_sp.append(rid_pill(row, year, rid_ok, jurisdiction))
     pills_sp.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
 
-    sp_all_ok = all(("Required" not in x) for x in pills_sp)
+    sp_all_ok = pills_all_ok(pills_sp)
     sp_kind   = "allowed" if sp_all_ok else "oagvc"
     sp_lbl    = "Allowed" if sp_kind == "allowed" else "Available via OA/GVC"
     sp_badge  = badge(sp_lbl, "allowed" if sp_kind == "allowed" else "oagvc")
@@ -491,9 +501,21 @@ def render_row(title: str, items: list[str]):
     )
 
 # ---------------------------------------------------------------------
+# Restart helper
+# ---------------------------------------------------------------------
+def restart_app():
+    # Clear query params and rerun to stage 1
+    try:
+        st.query_params.clear()       # Streamlit ≥1.32
+    except Exception:
+        st.experimental_set_query_params()
+    st.rerun()
+
+# ---------------------------------------------------------------------
 # PAGE FLOW
 # ---------------------------------------------------------------------
 if not segment:
+    # Top-right restart (hidden until later); not needed here
     # Stage 1: choose group
     items = []
     for seg in taxonomy["segments"]:
@@ -504,6 +526,10 @@ if not segment:
 elif not series:
     # Stage 2: choose series (random image)
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
+    # Restart button (replaces the old back link)
+    if st.sidebar.button("Restart"):
+        restart_app()
+
     items = []
     for s in series_defs_for(segment):
         items.append(
@@ -520,8 +546,9 @@ else:
     seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
     ser_label = next(s["label"] for s in series_defs_for(segment) if s["key"] == series)
 
-    # Sidebar back
-    st.sidebar.markdown(f"[← Back to models](?segment={segment}&series={series})")
+    # Sidebar "Restart" (replaces the "<- Back to models" link)
+    if st.sidebar.button("Restart"):
+        restart_app()
 
     if model:
         sel = df[df["model_key"] == model]
@@ -629,6 +656,9 @@ else:
 
     else:
         # No model selected -> models grid
+        if st.sidebar.button("Restart"):
+            restart_app()
+
         st.markdown(f"<div class='h1'>Choose a drone ({seg_label} → {ser_label})</div>", unsafe_allow_html=True)
         models = models_for(segment, series)
         items = []
@@ -654,4 +684,3 @@ else:
             f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
             unsafe_allow_html=True,
         )
-
