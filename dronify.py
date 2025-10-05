@@ -1,6 +1,6 @@
-# dronify.py — horizontal clickable cards (same tab), uniform images,
+# dronify.py — clickable cards (same tab via anchors), uniform images,
 # Stage2 random per-series image, Stage3 two-row grid,
-# and natural/human sorting by series → marketing_name (Pandas 2.x safe).
+# natural/human sorting by series → marketing_name (Pandas 2.x safe)
 
 import re
 import random
@@ -25,14 +25,14 @@ def load_data():
     taxonomy = load_yaml(TAXONOMY_PATH)
     df = pd.DataFrame(dataset["data"])
     # Ensure columns exist so UI never breaks
-    for col in ("image_url", "segment", "series", "class_marking", "weight_band"):
+    for col in ("image_url", "segment", "series", "class_marking", "weight_band", "marketing_name"):
         if col not in df.columns:
             df[col] = ""
     return df, taxonomy
 
 df, taxonomy = load_data()
 
-# ---------- Query-param state ----------
+# ---------- Query params ----------
 def get_qp():
     try:
         return dict(st.query_params)  # Streamlit ≥1.32
@@ -41,11 +41,11 @@ def get_qp():
                 for k, v in st.experimental_get_query_params().items()}
 
 qp = get_qp()
-segment = qp.get("segment")   # e.g. 'consumer' | 'pro' | 'enterprise' | None
-series  = qp.get("series")    # series key or None
-model   = qp.get("model")     # model_key or None
+segment = qp.get("segment")
+series  = qp.get("series")
+model   = qp.get("model")
 
-# ---------- Image resolver (serve repo images via GitHub Raw) ----------
+# ---------- Image resolver (repo images via GitHub Raw) ----------
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
 def resolve_img(url: str) -> str:
@@ -78,11 +78,10 @@ def models_for(segment_key: str, series_key: str):
     Return models in segment+series, sorted *naturally* by:
       1) series
       2) marketing_name
-    (Uses helper columns so Pandas 2.x 'key=' is applied once per sort.)
+    (Pandas 2.x safe: apply key() once by sorting derived string columns.)
     """
     subset = df[(df["segment"] == segment_key) & (df["series"] == series_key)].copy()
 
-    # helper columns as strings
     subset["series_sort"] = subset["series"].astype(str)
     subset["name_sort"]   = subset["marketing_name"].astype(str)
 
@@ -91,7 +90,6 @@ def models_for(segment_key: str, series_key: str):
         key=lambda col: col.map(natural_key),
         ignore_index=True
     )
-
     return subset.drop(columns=["series_sort", "name_sort"])
 
 def random_image_for_series(segment_key: str, series_key: str) -> str:
@@ -161,24 +159,18 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- Card (same-tab navigation) ----------
+# ---------- Card (anchor in same tab) ----------
 def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
     """
     qs example: 'segment=consumer' or 'segment=consumer&series=mini'
-    We update the URL in place and reload the page in the SAME TAB.
+    We use a plain anchor with target="_self" to stay in the same tab.
     """
     img = f"<div class='img'><img src='{img_url}' alt=''/></div>" if img_url else "<div class='img'></div>"
-    # Build safe JS to set ?query and reload
-    safe_qs = qs.replace("'", "%27")
-    js = (
-        "const u = new URL(window.location);"
-        f"u.search='?{safe_qs}';"
-        "window.history.pushState({},'',u);"
-        "window.location.reload();"
-        "return false;"
-    )
     sub_html = f"<div class='sub'>{sub}</div>" if sub else ""
-    return f"<a class='card' href='#' onclick=\"{js}\">{img}<div class='title'>{title}</div>{sub_html}</a>"
+    return (
+        f"<a class='card' href='?{qs}' target='_self' rel='noopener'>"
+        f"{img}<div class='title'>{title}</div>{sub_html}</a>"
+    )
 
 def render_row(title: str, items: list[str]):
     st.markdown(f"<div class='h1'>{title}</div><div class='strip'>{''.join(items)}</div>", unsafe_allow_html=True)
