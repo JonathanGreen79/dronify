@@ -704,9 +704,6 @@ else:
 """,
                 unsafe_allow_html=True,
             )
-            # Spacer before credentials
-            st.sidebar.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-            st.sidebar.markdown("<div class='sidebar-title'>Key specs</div>", unsafe_allow_html=True)
             st.sidebar.markdown(
                 f"<div class='sidebar-kv'><b>Model</b>: {row.get('marketing_name','—')}</div>"
                 f"<div class='sidebar-kv'><b>MTOW</b>: {row.get('mtom_g_nominal','—')} g</div>"
@@ -715,6 +712,10 @@ else:
                 f"<div class='sidebar-kv'><b>Released</b>: {row.get('year_released','—')}</div>",
                 unsafe_allow_html=True,
             )
+            # Spacer before credentials
+            st.sidebar.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+            
+            st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
 
             st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
             have_op   = st.sidebar.checkbox("Operator ID", value=False, key="c_op")
@@ -792,5 +793,6 @@ else:
                 f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
                 unsafe_allow_html=True,
             )
+
 
 
