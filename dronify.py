@@ -636,13 +636,17 @@ if view == "report":
 else:
     # BROWSE / PRODUCT FLOW
     # Top-right actions (main area — no sidebar here)
-    cols_hdr = st.columns([1, 0.18, 0.18])
-    with cols_hdr[1]:
-        if st.button("My permissions report", use_container_width=True):
-            _go_to_report()
-    with cols_hdr[2]:
-        if st.button("Restart", use_container_width=True):
-            _restart_app()
+    topbar = st.container()
+    with topbar:
+        st.markdown("<div style='margin-top:-6px'></div>", unsafe_allow_html=True)
+        c0, c1, c2, c3 = st.columns([0.64, 0.16, 0.16, 0.04])  # last col = right buffer
+        with c1:
+            if st.button("My permissions report", use_container_width=True):
+                _go_to_report()
+        with c2:
+            if st.button("Restart", use_container_width=True):
+                _restart_app()
+
 
     if not segment:
         # Stage 1: choose group
@@ -787,3 +791,4 @@ else:
                 f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
                 unsafe_allow_html=True,
             )
+
