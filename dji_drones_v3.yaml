@@ -194,7 +194,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "unknown"
     operator_id_required: "yes"
-    image_url: images/air_3s.jpg
+    image_url: images/air_3s.png
     notes: Placeholder class; verify label.
 
   - model_key: avata
