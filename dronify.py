@@ -704,7 +704,8 @@ else:
 """,
                 unsafe_allow_html=True,
             )
-
+            # Spacer before credentials
+            st.sidebar.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
             st.sidebar.markdown("<div class='sidebar-title'>Key specs</div>", unsafe_allow_html=True)
             st.sidebar.markdown(
                 f"<div class='sidebar-kv'><b>Model</b>: {row.get('marketing_name','—')}</div>"
@@ -791,4 +792,5 @@ else:
                 f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
                 unsafe_allow_html=True,
             )
+
 
