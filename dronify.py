@@ -717,7 +717,7 @@ else:
             
             st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
 
-            st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
+
             have_op   = st.sidebar.checkbox("Operator ID", value=False, key="c_op")
             have_fl   = st.sidebar.checkbox("Flyer ID", value=False, key="c_fl")
             have_a2   = st.sidebar.checkbox("A2 CofC", value=False, key="c_a2")
@@ -793,6 +793,7 @@ else:
                 f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
                 unsafe_allow_html=True,
             )
+
 
 
 
