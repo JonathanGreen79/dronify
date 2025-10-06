@@ -9,19 +9,32 @@ st.set_page_config(page_title="Dronify", layout="wide")
 
 DATASET_PATH = Path("dji_drones_v3.yaml")
 TAXONOMY_PATH = Path("taxonomy.yaml")
-
 RAW_BASE = "https://raw.githubusercontent.com/JonathanGreen79/dronify/main/images/"
 
+# =========================
+# Utilities: navigation
+# =========================
 def _restart_app():
-    # Clear query params for both new/old Streamlit APIs
     try:
         st.query_params.clear()
     except Exception:
         st.experimental_set_query_params()
-    # Clear any widget/session state and re-run
     st.session_state.clear()
     st.rerun()
 
+def _go_to_report():
+    try:
+        st.query_params.update({"view": "report"})
+    except Exception:
+        st.experimental_set_query_params(view="report")
+    st.rerun()
+
+def _go_to_browse():
+    try:
+        st.query_params.update({"view": ""})
+    except Exception:
+        st.experimental_set_query_params()
+    st.rerun()
 
 # ---------------------------------------------------------------------
 # Data helpers
@@ -45,7 +58,6 @@ def load_data():
         if col not in df.columns:
             df[col] = ""
 
-    # Normalized
     df["segment_norm"] = df["segment"].astype(str).str.strip().str.lower()
     df["series_norm"]  = df["series"].astype(str).str.strip().str.lower()
     return df, taxonomy
@@ -59,7 +71,6 @@ def resolve_img(url: str) -> str:
         return url
     if low.startswith("images/"):
         return RAW_BASE + url.split("/", 1)[1]
-    # bare filename -> assume images/
     return RAW_BASE + url.lstrip("/")
 
 # ---------------------------------------------------------------------
@@ -73,13 +84,6 @@ st.markdown(
 /* Titles */
 .h1 { font-weight: 800; font-size: 1.2rem; color: #1F2937; margin: 6px 0 12px 0; }
 .hdr { font-weight: 800; font-size: 1.35rem; margin: 6px 0 12px; }
-
-/* Sidebar tweaks (compact) */
-section[data-testid="stSidebar"] .block-container { padding-top: .4rem; }
-.sidebar-title { font-weight:800; font-size:1.02rem; margin:.35rem 0 .2rem; }
-.sidebar-kv { margin:.18rem 0; color:#374151; font-size:.90rem; }
-section[data-testid="stSidebar"] div[data-testid="stCheckbox"] { margin: 2px 0 !important; }
-section[data-testid="stSidebar"] label p { font-size: .9rem; margin: 0; }
 
 /* Badges & pills */
 .badge      { display:inline-block; padding:4px 10px; border-radius:999px; font-weight:700; font-size:.8rem; }
@@ -113,14 +117,20 @@ section[data-testid="stSidebar"] label p { font-size: .9rem; margin: 0; }
 .grid3 { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; align-items: stretch; }
 .grid3 > div { display:flex; }
 
-/* Header cells */
-.hdrcell { font-weight:800; font-size:1.05rem; color:#111827; }
-
 /* Vertical dividers */
 .divided.grid3 > div:not(:first-child) {
   border-left: 1px solid #EDEFF3;
   padding-left: 12px;
 }
+
+/* Simple table for report */
+.report-table { width:100%; border-collapse:collapse; }
+.report-table th, .report-table td { padding:8px 10px; border-bottom:1px solid #eee; font-size:.92rem; }
+.report-table th { text-align:left; font-weight:800; color:#111827; }
+.badge-chip { display:inline-block; padding:3px 8px; border-radius:999px; font-size:.75rem; font-weight:700; margin-right:6px; }
+.chip-allowed { background:#DCFCE7; color:#14532D; }
+.chip-possible { background:#DBEAFE; color:#1E40AF; }
+.chip-na { background:#F3F4F6; color:#6B7280; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -142,7 +152,7 @@ qp = get_qp()
 segment = qp.get("segment")
 series  = qp.get("series")
 model   = qp.get("model")
-view    = qp.get("view")  # None | "report"
+view    = qp.get("view", "")
 
 df, taxonomy = load_data()
 
@@ -229,7 +239,7 @@ def yesish(val: str) -> bool:
     return str(val).strip().lower() in {"yes", "true", "1", "ok"}
 
 # ---------------------------------------------------------------------
-# Regulatory helpers
+# Regulatory helpers & rules
 # ---------------------------------------------------------------------
 def _lc(x):
     return str(x or "").strip().lower()
@@ -243,12 +253,9 @@ def _parse_mtow_g(row) -> float | None:
         return float(s)
     except Exception:
         import re
-        m = re.search(r"([\d\\.]+)", s)
+        m = re.search(r"([\d\.]+)", s)
         return float(m.group(1)) if m else None
 
-# ---------------------------------------------------------------------
-# Rule text
-# ---------------------------------------------------------------------
 def rule_text_a1():
     return (
         "Fly close to people; avoid assemblies/crowds. TOAL: sensible separation; "
@@ -291,31 +298,25 @@ def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -
     is_classed = eu in {"c0","c1","c2","c3","c4"} or uk in {"uk0","uk1","uk2","uk3","uk4"}
     bridge = (jurisdiction.upper() == "UK" and year <= 2027)
 
-    # sub-100 g exemption: eligible for A1 & A3; IDs not required
     if mtow is not None and mtow < 100:
         return {"a1": True, "a2": False, "a3": True}
 
-    # --- A1 (Over people)
     a1 = False
     if mtow is not None and mtow <= 250:
         a1 = True
     if uk in {"uk0", "uk1"}:
         a1 = True
-    # C0/C1 bridge 2026–2027
     if bridge and year >= 2026 and eu in {"c0","c1"}:
         a1 = True
 
-    # --- A2 (Near people)
     a2 = False
     if uk == "uk2" or (bridge and eu == "c2"):
         if mtow is None or mtow <= 4000:
             a2 = True
-    # legacy (unclassed) transitional ≤2 kg before 2026
     if (jurisdiction.upper() == "UK" and year < 2026 and not is_classed
         and mtow is not None and mtow <= 2000):
         a2 = True
 
-    # --- A3 (Far from people)
     a3 = False
     if mtow is not None and mtow < 25000:
         a3 = True
@@ -325,7 +326,7 @@ def eligible_open_subcats(row: pd.Series, year: int, jurisdiction: str = "UK") -
     return {"a1": a1, "a2": a2, "a3": a3}
 
 # ---------------------------------------------------------------------
-# Remote ID (UK timeline logic)
+# Remote ID timeline (UK)
 # ---------------------------------------------------------------------
 def rid_is_required(row: pd.Series, year: int, jurisdiction: str = "UK") -> bool:
     """
@@ -346,8 +347,7 @@ def rid_is_required(row: pd.Series, year: int, jurisdiction: str = "UK") -> bool
         if uk in {"uk1","uk2","uk3","uk5","uk6"} or eu in {"c1","c2","c3"}:
             return True
 
-    # ≤2025
-    return False
+    return False  # ≤2025
 
 def rid_pill(row: pd.Series, year: int, rid_ok: bool, jurisdiction: str = "UK") -> str:
     required = rid_is_required(row, year, jurisdiction)
@@ -357,11 +357,10 @@ def rid_pill(row: pd.Series, year: int, rid_ok: bool, jurisdiction: str = "UK") 
         return pill_ok("Remote ID: Not required (Onboard)") if rid_ok else pill_info("Remote ID: Not required")
 
 def pills_all_ok(pills: list[str]) -> bool:
-    # Decide if every pill is OK based on class, not text
     return all("pill-need" not in p for p in pills)
 
 # ---------------------------------------------------------------------
-# Compute bricks (model detail)
+# Compute bricks for product page
 # ---------------------------------------------------------------------
 def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "UK"):
     """
@@ -373,7 +372,6 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
 
     elig = eligible_open_subcats(row, year, jurisdiction)
 
-    # Credentials
     have_op   = creds.get("op", False)
     have_fl   = creds.get("flyer", False)
     have_a2   = creds.get("a2", False)
@@ -383,14 +381,11 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
     mtow = _parse_mtow_g(row) or 0.0
     sub100 = mtow < 100
 
-    # ---------- A1 ----------
+    # A1
     if not elig["a1"]:
         html_a1 = card(
-            "A1 — Close to people",
-            badge("Not applicable", "na"),
-            f"<div class='small'>{rule_text_a1()}</div>"
-            f"<div>{pill_info('Not eligible by class/weight')}</div>",
-            "na",
+            "A1 — Close to people", badge("Not applicable", "na"),
+            f"<div class='small'>{rule_text_a1()}</div><div>{pill_info('Not eligible by class/weight')}</div>", "na"
         )
     else:
         pills_a1 = []
@@ -398,29 +393,26 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
             pills_a1.append(pill_need("Operator ID: Required"))
         else:
             pills_a1.append(pill_ok("Operator ID: OK" if not sub100 else "Operator ID: Not required"))
-
         if has_cam and not sub100 and not have_fl:
             pills_a1.append(pill_need("Flyer ID: Required"))
         else:
             pills_a1.append(pill_ok("Flyer ID: OK" if not sub100 else "Flyer ID: Not required"))
-
         pills_a1.append(rid_pill(row, year, rid_ok))
         pills_a1.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
+        a1_kind = "allowed" if pills_all_ok(pills_a1) else "possible"
+        html_a1 = card(
+            "A1 — Close to people",
+            badge("Allowed" if a1_kind=="allowed" else "Possible (additional requirements)", a1_kind),
+            f"<div class='small'>{rule_text_a1()}</div><div>{''.join(pills_a1)}</div>",
+            a1_kind
+        )
 
-        a1_all_ok = pills_all_ok(pills_a1)
-        a1_kind   = "allowed" if a1_all_ok else "possible"
-        a1_badge  = badge("Allowed" if a1_kind == "allowed" else "Possible (additional requirements)", a1_kind)
-        a1_body   = f"<div class='small'>{rule_text_a1()}</div><div>{''.join(pills_a1)}</div>"
-        html_a1   = card("A1 — Close to people", a1_badge, a1_body, a1_kind)
-
-    # ---------- A2 ----------
+    # A2
     if not elig["a2"]:
         html_a2 = card(
-            "A2 — Close with A2 CofC",
-            badge("Not applicable", "na"),
-            f"<div class='small'>{rule_text_a2(year)}</div>"
-            f"<div>{pill_info('Not eligible by class/weight for A2')}</div>",
-            "na",
+            "A2 — Close with A2 CofC", badge("Not applicable", "na"),
+            f"<div class='small'>{rule_text_a2(year)}</div><div>{pill_info('Not eligible by class/weight for A2')}</div>",
+            "na"
         )
     else:
         pills_a2 = []
@@ -429,21 +421,19 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
         pills_a2.append(pill_need("A2 CofC: Required") if not have_a2 else pill_ok("A2 CofC: OK"))
         pills_a2.append(rid_pill(row, year, rid_ok))
         pills_a2.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
+        a2_kind = "allowed" if pills_all_ok(pills_a2) else "possible"
+        html_a2 = card(
+            "A2 — Close with A2 CofC",
+            badge("Allowed" if a2_kind=="allowed" else "Possible (additional requirements)", a2_kind),
+            f"<div class='small'>{rule_text_a2(year)}</div><div>{''.join(pills_a2)}</div>",
+            a2_kind
+        )
 
-        a2_all_ok = pills_all_ok(pills_a2)
-        a2_kind   = "allowed" if a2_all_ok else "possible"
-        a2_badge  = badge("Allowed" if a2_kind == "allowed" else "Possible (additional requirements)", a2_kind)
-        a2_body   = f"<div class='small'>{rule_text_a2(year)}</div><div>{''.join(pills_a2)}</div>"
-        html_a2   = card("A2 — Close with A2 CofC", a2_badge, a2_body, a2_kind)
-
-    # ---------- A3 ----------
+    # A3
     if not elig["a3"]:
         html_a3 = card(
-            "A3 — Far from people",
-            badge("Not applicable", "na"),
-            f"<div class='small'>{rule_text_a3()}</div>"
-            f"<div>{pill_info('Not eligible by class/weight for A3')}</div>",
-            "na",
+            "A3 — Far from people", badge("Not applicable", "na"),
+            f"<div class='small'>{rule_text_a3()}</div><div>{pill_info('Not eligible by class/weight for A3')}</div>", "na"
         )
     else:
         pills_a3 = []
@@ -451,114 +441,101 @@ def compute_bricks(row: pd.Series, creds: dict, year: int, jurisdiction: str = "
         pills_a3.append(pill_need("Flyer ID: Required") if not have_fl else pill_ok("Flyer ID: OK"))
         pills_a3.append(rid_pill(row, year, rid_ok))
         pills_a3.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
+        a3_kind = "allowed" if pills_all_ok(pills_a3) else "possible"
+        html_a3 = card(
+            "A3 — Far from people",
+            badge("Allowed" if a3_kind=="allowed" else "Possible (additional requirements)", a3_kind),
+            f"<div class='small'>{rule_text_a3()}</div><div>{''.join(pills_a3)}</div>",
+            a3_kind
+        )
 
-        a3_all_ok = pills_all_ok(pills_a3)
-        a3_kind   = "allowed" if a3_all_ok else "possible"
-        a3_badge  = badge("Allowed" if a3_kind == "allowed" else "Possible (additional requirements)", a3_kind)
-        a3_body   = f"<div class='small'>{rule_text_a3()}</div><div>{''.join(pills_a3)}</div>"
-        html_a3   = card("A3 — Far from people", a3_badge, a3_body, a3_kind)
-
-    # ---------- Specific (OA / GVC) ----------
+    # Specific
     pills_sp = []
-    have_gvc  = creds.get("gvc", False)
-    have_oa   = creds.get("oa", False)
-    rid_ok  = yesish(row.get("remote_id_builtin", "unknown"))
-    geo_ok  = yesish(row.get("geo_awareness", "unknown"))
-
     pills_sp.append(pill_need("Operator ID: Required") if not have_op else pill_ok("Operator ID: OK"))
     pills_sp.append(pill_need("Flyer ID: Required")   if not have_fl else pill_ok("Flyer ID: OK"))
     pills_sp.append(pill_need("GVC: Required")        if not have_gvc else pill_ok("GVC: OK"))
     pills_sp.append(pill_need("OA: Required")         if not have_oa else pill_ok("OA: OK"))
     pills_sp.append(rid_pill(row, year, rid_ok))
     pills_sp.append(pill_ok("Geo-awareness: Onboard") if geo_ok else pill_need("Geo-awareness: Required"))
-
-    sp_all_ok = pills_all_ok(pills_sp)
-    sp_kind   = "allowed" if sp_all_ok else "oagvc"
-    sp_lbl    = "Allowed" if sp_kind == "allowed" else "Available via OA/GVC"
-    sp_badge  = badge(sp_lbl, "allowed" if sp_kind == "allowed" else "oagvc")
-    sp_body   = f"<div class='small'>{rule_text_specific()}</div><div>{''.join(pills_sp)}</div>"
-    html_sp   = card("Specific — OA / GVC", sp_badge, sp_body, sp_kind)
+    sp_kind = "allowed" if pills_all_ok(pills_sp) else "oagvc"
+    sp_lbl  = "Allowed" if sp_kind == "allowed" else "Available via OA/GVC"
+    html_sp = card(
+        "Specific — OA / GVC",
+        badge(sp_lbl, "allowed" if sp_kind=="allowed" else "oagvc"),
+        f"<div class='small'>{rule_text_specific()}</div><div>{''.join(pills_sp)}</div>",
+        sp_kind
+    )
 
     return html_a1, html_a2, html_a3, html_sp
 
 # ---------------------------------------------------------------------
-# Assessment for report page (no HTML, just statuses)
+# Report helpers (loop all drones)
 # ---------------------------------------------------------------------
-def assess_status_for_row(row: pd.Series, creds: dict, year: int, jurisdiction: str = "UK"):
-    """
-    Returns dict with strings for A1/A2/A3/Specific:
-      - "Allowed"
-      - "Possible — reason1; reason2"
-      - "N/A"
-    """
-    has_cam = yesish(row.get("has_camera", "yes"))
-    geo_ok  = yesish(row.get("geo_awareness", "unknown"))
-    rid_ok  = yesish(row.get("remote_id_builtin", "unknown"))
+def status_chip(kind: str) -> str:
+    if kind == "allowed":
+        return "<span class='badge-chip chip-allowed'>Allowed</span>"
+    if kind == "possible":
+        return "<span class='badge-chip chip-possible'>Possible</span>"
+    if kind == "na":
+        return "<span class='badge-chip chip-na'>N/A</span>"
+    return "<span class='badge-chip chip-na'>N/A</span>"
 
-    elig = eligible_open_subcats(row, year, jurisdiction)
+def summarize_one(row: pd.Series, creds: dict, year: int) -> dict:
+    """Return simple status for A1/A2/A3/Specific using same gates."""
+    a1, a2, a3, sp = compute_bricks(row, creds, year)
+    def pick_kind(html: str) -> str:
+        if "badge-allowed" in html:
+            return "allowed"
+        if "badge-possible" in html:
+            return "possible"
+        if "badge-oagvc" in html:
+            return "possible"  # show as possible
+        return "na" if "badge-na" in html else "na"
+    return {
+        "A1": pick_kind(a1),
+        "A2": pick_kind(a2),
+        "A3": pick_kind(a3),
+        "Specific": pick_kind(sp),
+    }
 
-    have_op   = creds.get("op", False)
-    have_fl   = creds.get("flyer", False)
-    have_a2   = creds.get("a2", False)
-    have_gvc  = creds.get("gvc", False)
-    have_oa   = creds.get("oa", False)
-
-    mtow = _parse_mtow_g(row) or 0.0
-    sub100 = mtow < 100
-
-    def build_status(eligible, needs):
-        if not eligible:
-            return "N/A"
-        blockers = [n for n, needed in needs if needed]
-        if blockers:
-            return "Possible — " + "; ".join(blockers)
-        return "Allowed"
-
-    # A1
-    needs_a1 = []
-    if elig["a1"]:
-        if has_cam and not sub100 and not have_op: needs_a1.append(("Operator ID", True))
-        if has_cam and not sub100 and not have_fl: needs_a1.append(("Flyer ID", True))
-        if rid_is_required(row, year, jurisdiction) and not rid_ok: needs_a1.append(("Remote ID", True))
-        if not geo_ok: needs_a1.append(("Geo-awareness", True))
-    a1_status = build_status(elig["a1"], needs_a1)
-
-    # A2
-    needs_a2 = []
-    if elig["a2"]:
-        if not have_op: needs_a2.append(("Operator ID", True))
-        if not have_fl: needs_a2.append(("Flyer ID", True))
-        if not have_a2: needs_a2.append(("A2 CofC", True))
-        if rid_is_required(row, year, jurisdiction) and not rid_ok: needs_a2.append(("Remote ID", True))
-        if not geo_ok: needs_a2.append(("Geo-awareness", True))
-    a2_status = build_status(elig["a2"], needs_a2)
-
-    # A3
-    needs_a3 = []
-    if elig["a3"]:
-        if not have_op: needs_a3.append(("Operator ID", True))
-        if not have_fl: needs_a3.append(("Flyer ID", True))
-        if rid_is_required(row, year, jurisdiction) and not rid_ok: needs_a3.append(("Remote ID", True))
-        if not geo_ok: needs_a3.append(("Geo-awareness", True))
-    a3_status = build_status(elig["a3"], needs_a3)
-
-    # Specific
-    needs_sp = []
-    # Specific is always *possible* if you can obtain GVC+OA; but show blockers vs user creds
-    if not have_op: needs_sp.append(("Operator ID", True))
-    if not have_fl: needs_sp.append(("Flyer ID", True))
-    if not have_gvc: needs_sp.append(("GVC", True))
-    if not have_oa: needs_sp.append(("OA", True))
-    if rid_is_required(row, year, jurisdiction) and not rid_ok: needs_sp.append(("Remote ID", True))
-    if not geo_ok: needs_sp.append(("Geo-awareness", True))
-    # Treat Specific as "Allowed" only if user already has all of these
-    specific_allowed = (len(needs_sp) == 0)
-    specific_status = "Allowed" if specific_allowed else ("Possible — " + "; ".join(n for n, _ in needs_sp))
-
-    return dict(a1=a1_status, a2=a2_status, a3=a3_status, specific=specific_status)
+def render_report_table(df_list: list[dict]):
+    # df_list: [{name, segment, series, y2025:{}, y2026:{}, y2028:{}}, ...]
+    rows = []
+    for item in df_list:
+        r = f"""
+<tr>
+  <td>{item['name']}</td>
+  <td>{item['segment']}</td>
+  <td>{item['series']}</td>
+  <td>{status_chip(item['y2025']['A1'])} {status_chip(item['y2025']['A2'])} {status_chip(item['y2025']['A3'])} {status_chip(item['y2025']['Specific'])}</td>
+  <td>{status_chip(item['y2026']['A1'])} {status_chip(item['y2026']['A2'])} {status_chip(item['y2026']['A3'])} {status_chip(item['y2026']['Specific'])}</td>
+  <td>{status_chip(item['y2028']['A1'])} {status_chip(item['y2028']['A2'])} {status_chip(item['y2028']['A3'])} {status_chip(item['y2028']['Specific'])}</td>
+</tr>
+"""
+        rows.append(r)
+    st.markdown(
+        f"""
+<table class="report-table">
+  <thead>
+    <tr>
+      <th>Drone</th>
+      <th>Segment</th>
+      <th>Series</th>
+      <th>Now – 31 Dec 2025</th>
+      <th>1 Jan 2026 – 31 Dec 2027</th>
+      <th>From 1 Jan 2028 (planned)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {''.join(rows)}
+  </tbody>
+</table>
+""",
+        unsafe_allow_html=True,
+    )
 
 # ---------------------------------------------------------------------
-# Simple link helpers
+# UI helpers
 # ---------------------------------------------------------------------
 def card_link(qs: str, title: str, sub: str = "", img_url: str = "") -> str:
     img = (
@@ -580,77 +557,98 @@ def render_row(title: str, items: list[str]):
     )
 
 # ---------------------------------------------------------------------
-# PAGE: Permissions report
+# REPORT VIEW (no sidebar)
 # ---------------------------------------------------------------------
 def render_report_page():
-    st.markdown("<div class='h1'>My permissions report</div>", unsafe_allow_html=True)
+    st.markdown("# What & where I can fly (by year)")
+    # Back + Restart buttons (top)
+    cols_top = st.columns([0.18, 0.18, 1])
+    with cols_top[0]:
+        if st.button("Back to browse", use_container_width=True):
+            _go_to_browse()
+    with cols_top[1]:
+        if st.button("Restart", use_container_width=True):
+            _restart_app()
 
-    # Sidebar is visible here (intentionally)
-    st.sidebar.markdown("### Your credentials")
-    have_op   = st.sidebar.checkbox("Operator ID", value=False, key="rp_op")
-    have_fl   = st.sidebar.checkbox("Flyer ID", value=False, key="rp_fl")
-    have_a2   = st.sidebar.checkbox("A2 CofC", value=False, key="rp_a2")
-    have_gvc  = st.sidebar.checkbox("GVC", value=False, key="rp_gvc")
-    have_oa   = st.sidebar.checkbox("OA (Operational Authorisation)", value=False, key="rp_oa")
+    st.markdown("### Your credentials")
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        have_op = st.checkbox("Operator ID", value=False, key="r_op")
+    with c2:
+        have_fl = st.checkbox("Flyer ID", value=False, key="r_fl")
+    with c3:
+        have_a2 = st.checkbox("A2 CofC", value=False, key="r_a2")
+    with c4:
+        have_gvc = st.checkbox("GVC", value=False, key="r_gvc")
+    with c5:
+        have_oa  = st.checkbox("OA (Operational Authorisation)", value=False, key="r_oa")
+
     creds = dict(op=have_op, flyer=have_fl, a2=have_a2, gvc=have_gvc, oa=have_oa)
 
-    st.sidebar.markdown("### Actions")
-    if st.sidebar.button("Show where I can fly (by year)", use_container_width=True):
-        st.session_state["show_report"] = True
+    # Filter controls (optional: segment/series search)
+    st.markdown("### Filter")
+    f1, f2, f3 = st.columns([0.25, 0.25, 0.5])
+    with f1:
+        seg_pick = st.selectbox(
+            "Segment",
+            options=["(All)"] + sorted(df["segment"].dropna().unique().tolist()),
+            index=0,
+        )
+    with f2:
+        ser_pick = st.selectbox(
+            "Series",
+            options=["(All)"] + sorted(df["series"].dropna().unique().tolist()),
+            index=0,
+        )
+    with f3:
+        search_txt = st.text_input("Search name…", value="")
 
-    st.sidebar.markdown("---")
-    if st.sidebar.button("Restart", key="rp_restart_btn", use_container_width=True):
-        _restart_app()
+    # Build list
+    data_iter = df.copy()
+    if seg_pick != "(All)":
+        data_iter = data_iter[data_iter["segment"] == seg_pick]
+    if ser_pick != "(All)":
+        data_iter = data_iter[data_iter["series"] == ser_pick]
+    if search_txt.strip():
+        sw = search_txt.strip().lower()
+        data_iter = data_iter[data_iter["marketing_name"].astype(str).str.lower().str.contains(sw)]
 
-    show = st.session_state.get("show_report", False)
-    if not show:
-        st.info("Tick your credentials on the left, then click **Show where I can fly (by year)**.")
-        return
+    results = []
+    for _, r in data_iter.iterrows():
+        results.append({
+            "name": r.get("marketing_name", ""),
+            "segment": r.get("segment", ""),
+            "series": r.get("series", ""),
+            "y2025": summarize_one(r, creds, 2025),
+            "y2026": summarize_one(r, creds, 2026),
+            "y2028": summarize_one(r, creds, 2028),
+        })
 
-    def build_year_df(year: int, label: str):
-        rows = []
-        for _, r in df.iterrows():
-            status = assess_status_for_row(r, creds, year, jurisdiction="UK")
-            rows.append({
-                "Model": r.get("marketing_name",""),
-                "Segment": r.get("segment",""),
-                "Series": r.get("series",""),
-                "A1": status["a1"],
-                "A2": status["a2"],
-                "A3": status["a3"],
-                "Specific": status["specific"],
-            })
-        out = pd.DataFrame(rows)
-        # Keep it readable: sort by Segment → Series → Model
-        out = out.sort_values(["Segment","Series","Model"], kind="stable", ignore_index=True)
-        st.markdown(f"**{label}**")
-        st.dataframe(out, use_container_width=True, hide_index=True)
-
-    build_year_df(2025, "Now – 31 Dec 2025")
-    build_year_df(2026, "1 Jan 2026 – 31 Dec 2027 (UK–EU bridge)")
-    build_year_df(2028, "From 1 Jan 2028 (planned)")
+    render_report_table(results)
 
 # ---------------------------------------------------------------------
-# PAGE FLOW (Browse or Report)
+# PAGE FLOW
 # ---------------------------------------------------------------------
 if view == "report":
+    # REPORT PAGE (no sidebar at all)
     render_report_page()
 
 else:
-    # BROWSE FLOW
-    # Top-right quick link to report
-    st.markdown(
-        "<div style='display:flex;justify-content:flex-end;margin-bottom:6px;'>"
-        "<a href='?view=report' style='font-weight:600;text-decoration:none;border:1px solid #E5E7EB;padding:6px 10px;border-radius:8px;'>"
-        "My permissions report</a></div>",
-        unsafe_allow_html=True,
-    )
+    # BROWSE / PRODUCT FLOW
+    # Top-right actions (main area — no sidebar here)
+    cols_hdr = st.columns([1, 0.18, 0.18])
+    with cols_hdr[1]:
+        if st.button("My permissions report", use_container_width=True):
+            _go_to_report()
+    with cols_hdr[2]:
+        if st.button("Restart", use_container_width=True):
+            _restart_app()
 
     if not segment:
-        # Stage 1: choose group (no sidebar content here)
+        # Stage 1: choose group
         items = []
         for seg in taxonomy["segments"]:
-            img = SEGMENT_HERO = {
+            img = {
                 "consumer": resolve_img("images/consumer.jpg"),
                 "pro": resolve_img("images/professional.jpg"),
                 "enterprise": resolve_img("images/enterprise.jpg"),
@@ -659,7 +657,7 @@ else:
         render_row("Choose your drone category", items)
 
     elif not series:
-        # Stage 2: choose series (no sidebar content here)
+        # Stage 2: choose series (random image)
         seg_label = next(s["label"] for s in taxonomy["segments"] if s["key"] == segment)
         items = []
         for s in series_defs_for(segment):
@@ -683,20 +681,14 @@ else:
             sel = None
 
         if sel is not None and not sel.empty:
-            # --- Product page (sidebar visible) ---
+            # ========== FINAL PRODUCT PAGE (SIDEBAR VISIBLE ONLY HERE) ==========
             row = sel.iloc[0]
 
-            # Sidebar controls
-            st.sidebar.markdown("### Navigation")
-            if st.sidebar.button("Restart", key="restart_btn", use_container_width=True):
-                _restart_app()
-
-            # Thumbnail + caption
+            # Sidebar content ONLY in this branch
             img_url = resolve_img(row.get("image_url", ""))
             if img_url:
                 st.sidebar.image(img_url, use_container_width=True, caption=row.get("marketing_name", ""))
 
-            # Flags & classes
             eu_flag = resolve_img("images/eu.png")
             uk_flag = resolve_img("images/uk.png")
             eu_cls  = row.get("eu_class_marking", "unknown")
@@ -709,7 +701,6 @@ else:
                 unsafe_allow_html=True,
             )
 
-            # Key specs
             st.sidebar.markdown("<div class='sidebar-title'>Key specs</div>", unsafe_allow_html=True)
             st.sidebar.markdown(
                 f"<div class='sidebar-kv'><b>Model</b>: {row.get('marketing_name','—')}</div>"
@@ -720,7 +711,6 @@ else:
                 unsafe_allow_html=True,
             )
 
-            # Credentials (compact)
             st.sidebar.markdown("<div class='sidebar-title'>Your credentials</div>", unsafe_allow_html=True)
             have_op   = st.sidebar.checkbox("Operator ID", value=False, key="c_op")
             have_fl   = st.sidebar.checkbox("Flyer ID", value=False, key="c_fl")
@@ -734,15 +724,12 @@ else:
             a_26  = compute_bricks(row, creds, 2026, jurisdiction="UK")
             a_28  = compute_bricks(row, creds, 2028, jurisdiction="UK")
 
-            # ---------- HEADERS AS FIRST GRID ROW ----------
+            # ---------- HEADERS (first grid row) ----------
             st.markdown(
                 "<div class='grid3 divided' style='margin:0 0 8px 0;'>"
-                "<div style='text-align:center;font-weight:600;font-size:.95rem;color:#374151;margin-bottom:4px;'>"
-                "Now – 31 Dec 2025</div>"
-                "<div style='text-align:center;font-weight:600;font-size:.95rem;color:#374151;margin-bottom:4px;'>"
-                "1 Jan 2026 – 31 Dec 2027 (UK–EU bridge)</div>"
-                "<div style='text-align:center;font-weight:600;font-size:.95rem;color:#374151;margin-bottom:4px;'>"
-                "From 1 Jan 2028 (planned)</div>"
+                "<div style='text-align:center;font-weight:600;font-size:.95rem;color:#374151;margin-bottom:4px;'>Now – 31 Dec 2025</div>"
+                "<div style='text-align:center;font-weight:600;font-size:.95rem;color:#374151;margin-bottom:4px;'>1 Jan 2026 – 31 Dec 2027 (UK–EU bridge)</div>"
+                "<div style='text-align:center;font-weight:600;font-size:.95rem;color:#374151;margin-bottom:4px;'>From 1 Jan 2028 (planned)</div>"
                 "</div>",
                 unsafe_allow_html=True,
             )
@@ -750,39 +737,31 @@ else:
             # Rows
             st.markdown(
                 "<div class='grid3 divided'>"
-                f"<div>{a_now[0]}</div>"
-                f"<div>{a_26[0]}</div>"
-                f"<div>{a_28[0]}</div>"
+                f"<div>{a_now[0]}</div><div>{a_26[0]}</div><div>{a_28[0]}</div>"
                 "</div>",
                 unsafe_allow_html=True,
             )
             st.markdown(
                 "<div class='grid3 divided'>"
-                f"<div>{a_now[1]}</div>"
-                f"<div>{a_26[1]}</div>"
-                f"<div>{a_28[1]}</div>"
+                f"<div>{a_now[1]}</div><div>{a_26[1]}</div><div>{a_28[1]}</div>"
                 "</div>",
                 unsafe_allow_html=True,
             )
             st.markdown(
                 "<div class='grid3 divided'>"
-                f"<div>{a_now[2]}</div>"
-                f"<div>{a_26[2]}</div>"
-                f"<div>{a_28[2]}</div>"
+                f"<div>{a_now[2]}</div><div>{a_26[2]}</div><div>{a_28[2]}</div>"
                 "</div>",
                 unsafe_allow_html=True,
             )
             st.markdown(
                 "<div class='grid3 divided'>"
-                f"<div>{a_now[3]}</div>"
-                f"<div>{a_26[3]}</div>"
-                f"<div>{a_28[3]}</div>"
+                f"<div>{a_now[3]}</div><div>{a_26[3]}</div><div>{a_28[3]}</div>"
                 "</div>",
                 unsafe_allow_html=True,
             )
 
         else:
-            # --- Models list (no sidebar content here) ---
+            # Models grid (no sidebar)
             st.markdown(f"<div class='h1'>Choose a drone ({seg_label} → {ser_label})</div>", unsafe_allow_html=True)
             models = models_for(segment, series)
             items = []
@@ -808,4 +787,3 @@ else:
                 f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
                 unsafe_allow_html=True,
             )
-
