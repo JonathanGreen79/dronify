@@ -638,14 +638,17 @@ else:
     # Top-right actions (main area — no sidebar here)
     topbar = st.container()
     with topbar:
-        st.markdown("<div style='margin-top:-6px'></div>", unsafe_allow_html=True)
-        c0, c1, c2, c3 = st.columns([0.64, 0.16, 0.16, 0.04])  # last col = right buffer
+        # add some breathing room above the buttons
+        st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+    
+        c0, c1, c2, c3 = st.columns([0.64, 0.16, 0.16, 0.04])  # right buffer remains
         with c1:
             if st.button("My permissions report", use_container_width=True):
                 _go_to_report()
         with c2:
             if st.button("Restart", use_container_width=True):
                 _restart_app()
+
 
 
     if not segment:
@@ -725,6 +728,20 @@ else:
             have_oa   = st.sidebar.checkbox("OA (Operational Authorisation)", value=False, key="c_oa")
             creds = dict(op=have_op, flyer=have_fl, a2=have_a2, gvc=have_gvc, oa=have_oa)
 
+            # Legend
+            st.sidebar.markdown(
+                """
+            <div class="legend">
+              <span class="badge badge-allowed">Allowed</span>
+              <span class="badge badge-possible">Possible (additional requirements)</span>
+              <span class="badge badge-na">Not applicable</span>
+              <span class="badge badge-oagvc">Available via OA/GVC</span>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+
             # --------- Compute all bricks (UK by default) ---------
             a_now = compute_bricks(row, creds, 2025, jurisdiction="UK")
             a_26  = compute_bricks(row, creds, 2026, jurisdiction="UK")
@@ -793,6 +810,7 @@ else:
                 f"<div style='display:flex;gap:14px;flex-wrap:wrap'>{''.join(items)}</div>",
                 unsafe_allow_html=True,
             )
+
 
 
 
