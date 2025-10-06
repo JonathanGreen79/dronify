@@ -270,7 +270,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/mavic_3_classic.jpg
+    image_url: images/mavic3classic.jpg
     notes: Single Hasselblad camera.
 
   - model_key: mavic-3-pro
@@ -285,7 +285,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/mavic_3_pro.jpg
+    image_url: images/mavic3pro.png
     notes: Triple-camera; C2.
 
   - model_key: inspire-3
@@ -300,7 +300,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/inspire_3.jpg
+    image_url: images/inspire3.png
     notes: Cinema platform; Specific category common.
 
   # ========== ENTERPRISE ==========
@@ -316,7 +316,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/mavic_3e.jpg
+    image_url: images/mavic3.jpg
     notes: Mapping + RTK.
 
   - model_key: mavic-3t
@@ -331,7 +331,7 @@ data:
     geo_awareness: "yes"
     remote_id_builtin: "yes"
     operator_id_required: "yes"
-    image_url: images/mavic_3t.jpg
+    image_url: images/mavic3.jpg
     notes: Thermal variant.
 
   - model_key: matrice-30
